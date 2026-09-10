@@ -1,0 +1,9 @@
+# Все текстовые файлы всегда должны использовать LF в репозитории и в рабочей директории
+* text=auto eol=lf
+
+# Бинарные файлы, которые Git не должен трогать
+*.jar binary
+*.png binary
+*.jpg binary
+*.gif binary
+*.ico binary
