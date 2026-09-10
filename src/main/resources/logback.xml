@@ -9,18 +9,10 @@
     </appender>
 
     <!-- 2. Настройка вывода в ФАЙЛ -->
-    <appender name="FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
-        <!-- Путь к файлу лога -->
+    <appender name="FILE" class="ch.qos.logback.core.FileAppender">
         <file>${user.home}/.java-task-manager/logs/app.log</file>
-
-        <!-- Политика ротации: каждый день создается новый файл, старые хранятся 7 дней -->
-        <rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
-            <fileNamePattern>${user.home}/.java-task-manager/logs/app.%d{yyyy-MM-dd}.log</fileNamePattern>
-            <maxHistory>7</maxHistory>
-        </rollingPolicy>
-
+        <append>false</append>
         <encoder>
-            <!-- Более подробный формат для файла -->
             <pattern>%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n</pattern>
         </encoder>
     </appender>
