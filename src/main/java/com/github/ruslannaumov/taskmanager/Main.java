@@ -1,31 +1,34 @@
 package com.github.ruslannaumov.taskmanager;
 
-import com.github.ruslannaumov.taskmanager.config.AppConfig;
+import com.github.ruslannaumov.taskmanager.database.DatabaseInitializer;
+import com.github.ruslannaumov.taskmanager.dao.SqliteTaskDao;
 import com.github.ruslannaumov.taskmanager.model.Task;
 import com.github.ruslannaumov.taskmanager.model.TaskStatus;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 public class Main {
-
     private static final Logger logger = LoggerFactory.getLogger(Main.class);
 
     public static void main(String[] args) {
         logger.info("Java Task Manager is starting...");
-        logger.info("App directory: {}", AppConfig.getAppDir());
-        logger.info("Is first run? {}", AppConfig.isFirstRun());
 
-        // Создаем тестовые задачи
-        Task task1 = new Task("Изучить Java Core");
-        task1.setId(1L); // Имитируем, что задача сохранена в БД с ID 1
+        // 1. Инициализация базы данных
+        DatabaseInitializer.initialize();
 
-        Task task2 = new Task("Написать диплом", "Сдать до 1 июня");
-        task2.setStatus(TaskStatus.IN_PROGRESS); // Меняем статус
+        // 2. Создаем DAO
+        SqliteTaskDao taskDao = new SqliteTaskDao();
 
-        logger.info("Created tasks:");
-        logger.info("Task 1: {}", task1);
-        logger.info("Task 2: {}", task2);
+        // 3. Создаем и сохраняем задачу
+        Task task = new Task("SQLite", "Connect Java to SQLite database");
+        task.setStatus(TaskStatus.IN_PROGRESS);
+        taskDao.save(task);
 
-        logger.info("Application finished successfully");
+        // 4. Читаем все задачи из базы
+        var tasks = taskDao.findAll();
+        logger.info("Total tasks in DB: {}", tasks.size());
+        for (Task t : tasks) {
+            logger.info("{}", t);
+        }
     }
 }
