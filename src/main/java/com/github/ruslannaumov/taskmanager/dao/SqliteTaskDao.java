@@ -10,8 +10,9 @@ import java.sql.*;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 
-public class SqliteTaskDao implements TaskDao {
+public class SqliteTaskDao implements ITaskDao {
     private static final Logger logger = LoggerFactory.getLogger(SqliteTaskDao.class);
 
     @Override
@@ -64,5 +65,54 @@ public class SqliteTaskDao implements TaskDao {
             logger.error("Error loading tasks", e);
         }
         return tasks;
+    }
+
+    @Override
+    public Optional<Task> findById(Long id) {
+        String sql = "SELECT id, title, description, status, created_at, updated_at FROM tasks WHERE id = ?";
+
+        try (Connection conn = DatabaseConnection.getConnection();
+             PreparedStatement pstmt = conn.prepareStatement(sql)) {
+
+            pstmt.setLong(1, id);
+
+            try (ResultSet rs = pstmt.executeQuery()) {
+                if (rs.next()) {
+                    Task task = new Task();
+                    task.setId(rs.getLong("id"));
+                    task.setTitle(rs.getString("title"));
+                    task.setDescription(rs.getString("description"));
+                    task.setStatus(TaskStatus.valueOf(rs.getString("status")));
+                    task.setCreatedAt(LocalDateTime.parse(rs.getString("created_at")));
+                    task.setUpdatedAt(LocalDateTime.parse(rs.getString("updated_at")));
+                    return Optional.of(task);
+                }
+            }
+
+        } catch (SQLException e) {
+            logger.error("Error finding task by id: {}", id, e);
+        }
+        return Optional.empty();
+    }
+
+    @Override
+    public void update(Task task) {
+        String sql = "UPDATE tasks SET title = ?, description = ?, status = ?, updated_at = ? WHERE id = ?";
+
+        try (Connection conn = DatabaseConnection.getConnection();
+             PreparedStatement pstmt = conn.prepareStatement(sql)) {
+
+            pstmt.setString(1, task.getTitle());
+            pstmt.setString(2, task.getDescription());
+            pstmt.setString(3, task.getStatus().name());
+            pstmt.setString(4, task.getUpdatedAt().toString());
+            pstmt.setLong(5, task.getId());
+
+            pstmt.executeUpdate();
+            logger.info("Task updated: {}", task.getTitle());
+
+        } catch (SQLException e) {
+            logger.error("Error updating task", e);
+        }
     }
 }

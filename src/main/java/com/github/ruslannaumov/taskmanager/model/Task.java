@@ -11,7 +11,7 @@ public class Task {
     private LocalDateTime updatedAt;
 
     public Task(){
-        this.status=TaskStatus.TODO;
+        this.status=TaskStatus.PENDING;
         this.createdAt=LocalDateTime.now();
         this.updatedAt=LocalDateTime.now();
     }

@@ -1,7 +1,7 @@
 package com.github.ruslannaumov.taskmanager.model;
 
 public enum TaskStatus {
-    TODO("Ожидает"),
+    PENDING("Ожидает"),
     IN_PROGRESS("В работе"),
     DONE("Завершена");
 
