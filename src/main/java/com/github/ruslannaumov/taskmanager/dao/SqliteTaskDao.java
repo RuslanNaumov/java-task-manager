@@ -29,7 +29,7 @@ public class SqliteTaskDao implements ITaskDao {
             pstmt.setString(4, task.getCreatedAt().toString());
             pstmt.setString(5, task.getUpdatedAt().toString());
 
-            pstmt.executeUpdate(); // Выполняем INSERT
+            pstmt.executeUpdate();
             logger.info("Task saved to DB: {}", task.getTitle());
 
         } catch (SQLException e) {
@@ -47,18 +47,7 @@ public class SqliteTaskDao implements ITaskDao {
              ResultSet rs = stmt.executeQuery(sql)) {
 
             while (rs.next()) {
-                Task task = new Task();
-                task.setId(rs.getLong("id"));
-                task.setTitle(rs.getString("title"));
-                task.setDescription(rs.getString("description"));
-
-                String statusStr = rs.getString("status");
-                task.setStatus(TaskStatus.valueOf(statusStr));
-
-                task.setCreatedAt(LocalDateTime.parse(rs.getString("created_at")));
-                task.setUpdatedAt(LocalDateTime.parse(rs.getString("updated_at")));
-
-                tasks.add(task);
+                tasks.add(mapResultSetToTask(rs));
             }
 
         } catch (SQLException e) {
@@ -78,14 +67,7 @@ public class SqliteTaskDao implements ITaskDao {
 
             try (ResultSet rs = pstmt.executeQuery()) {
                 if (rs.next()) {
-                    Task task = new Task();
-                    task.setId(rs.getLong("id"));
-                    task.setTitle(rs.getString("title"));
-                    task.setDescription(rs.getString("description"));
-                    task.setStatus(TaskStatus.valueOf(rs.getString("status")));
-                    task.setCreatedAt(LocalDateTime.parse(rs.getString("created_at")));
-                    task.setUpdatedAt(LocalDateTime.parse(rs.getString("updated_at")));
-                    return Optional.of(task);
+                    return Optional.of(mapResultSetToTask(rs));
                 }
             }
 
@@ -114,5 +96,29 @@ public class SqliteTaskDao implements ITaskDao {
         } catch (SQLException e) {
             logger.error("Error updating task", e);
         }
+    }
+
+    @Override
+    public void deleteById(Long id) {
+        String sql = "DELETE FROM tasks WHERE id=?";
+        try (Connection conn = DatabaseConnection.getConnection();
+             PreparedStatement pstmt = conn.prepareStatement(sql)) {
+
+            pstmt.setLong(1, id);
+            pstmt.executeUpdate();
+        } catch (SQLException e) {
+            logger.error("Error deleting task", e);
+        }
+    }
+
+    private Task mapResultSetToTask(ResultSet rs) throws SQLException {
+        Task task = new Task();
+        task.setId(rs.getLong("id"));
+        task.setTitle(rs.getString("title"));
+        task.setDescription(rs.getString("description"));
+        task.setStatus(TaskStatus.valueOf(rs.getString("status")));
+        task.setCreatedAt(LocalDateTime.parse(rs.getString("created_at")));
+        task.setUpdatedAt(LocalDateTime.parse(rs.getString("updated_at")));
+        return task;
     }
 }

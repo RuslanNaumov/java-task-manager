@@ -36,16 +36,30 @@ public class TaskService implements ITaskService {
     }
 
     @Override
-    public void completeTask(Long taskId) {
-        Optional<Task> optionalTask = taskDao.findById(taskId);
+    public Optional<Task> getTaskById(Long id) {
+        return taskDao.findById(id);
+    }
 
-        if (optionalTask.isPresent()) {
-            Task task = optionalTask.get();
-            task.setStatus(TaskStatus.DONE);
+    @Override
+    public void updateTask(Long id, String title, String description, TaskStatus status) {
+        Optional<Task> taskOptional = taskDao.findById(id);
+
+        if (taskOptional.isPresent()) {
+            // Достаем объект из Optional
+            Task task = taskOptional.get();
+
+            task.setTitle(title);
+            task.setDescription(description);
+            task.setStatus(status);
+
             taskDao.update(task);
-            logger.info("Сервис завершил задачу с ID: {}", taskId);
         } else {
-            logger.warn("Задача с ID {} не найдена для завершения.", taskId);
+            System.out.println("Task with ID " + id + " not found.");
         }
+    }
+
+    @Override
+    public void deleteTask(Long id) {
+        taskDao.deleteById(id);
     }
 }

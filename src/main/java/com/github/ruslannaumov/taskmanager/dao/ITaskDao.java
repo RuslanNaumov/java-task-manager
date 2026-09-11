@@ -9,4 +9,5 @@ public interface ITaskDao {
     List<Task> findAll();
     Optional<Task> findById(Long id);
     void update(Task task);
+    void deleteById(Long id);
 }
