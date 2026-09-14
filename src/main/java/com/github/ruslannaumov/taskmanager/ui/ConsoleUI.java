@@ -79,7 +79,7 @@ public class ConsoleUI {
                 if (tasks.isEmpty()) {
                     clearScreen();
                     System.out.printf("No tasks found for query: \"%s\"%n", currentQuery);
-                    System.out.println("\nEnter new search query, [M] for Main Menu, or press Enter to show ALL tasks:");
+                    System.out.println("\nEnter new search query, [M] for Main Menu, or press Enter to show all tasks:");
                     System.out.print("> ");
                     String input = scanner.nextLine().trim();
 
@@ -105,7 +105,7 @@ public class ConsoleUI {
             }
             else if (action.equals("SEARCH")) {
                 clearScreen();
-                System.out.print("Enter search query (or press Enter to show ALL tasks): ");
+                System.out.print("Enter search query (or press Enter to show all tasks): ");
                 String newQuery = scanner.nextLine().trim();
 
                 if (newQuery.isBlank()) {
@@ -128,6 +128,8 @@ public class ConsoleUI {
 
         while (true) {
             clearScreen();
+
+            // Защита от выхода за границы страниц
             if (currentPage > totalPages) currentPage = totalPages;
             if (currentPage < 1) currentPage = 1;
 
@@ -151,57 +153,108 @@ public class ConsoleUI {
             System.out.println("OR type [E] to Edit | [D] to Delete");
             System.out.print("> ");
 
-            String input = scanner.nextLine().trim().toUpperCase();
+            // ЧИТАЕМ ВВОД БЕЗ .toUpperCase(), чтобы сохранить оригинальный регистр для строгой проверки
+            String rawInput = scanner.nextLine().trim();
 
-            // 1. Навигация и выход
-            if (input.equals("M") || input.equals("B")) {
-                return "EXIT";
-            }
-            if (input.equals("S")) {
-                return "SEARCH";
-            }
-            if (input.equals("N")) {
-                if (currentPage < totalPages) currentPage++;
-                continue;
-            }
-            if (input.equals("P")) {
-                if (currentPage > 1) currentPage--;
-                continue;
-            }
+            // Передаем ввод в наш строгий парсер
+            String action = parseAction(rawInput);
 
-            // 2. Действие: Редактирование
-            if (input.equals("E")) {
-                Long id = promptForTaskId("Enter Task ID to edit: ", tasks);
-                if (id != null) {
-                    editSpecificTask(id);
-                    return "REFRESH"; // Сигнал перезагрузить текущий вид (все или поиск)
+            // Обрабатываем результат парсинга
+            switch (action) {
+                case "EXIT" -> {
+                    return "EXIT";
+                }
+                case "SEARCH" -> {
+                    return "SEARCH";
+                }
+                case "NEXT" -> {
+                    if (currentPage < totalPages) currentPage++;
+                    continue;
+                }
+                case "PREV" -> {
+                    if (currentPage > 1) currentPage--;
+                    continue;
+                }
+                case "EDIT" -> {
+                    Long id = promptForTaskId("Enter Task ID to edit: ", tasks);
+                    if (id != null) {
+                        editSpecificTask(id);
+                        return "REFRESH"; // Сигнал перезагрузить текущий вид
+                    }
+                }
+                case "DELETE" -> {
+                    Long id = promptForTaskId("Enter Task ID to delete: ", tasks);
+                    if (id != null) {
+                        deleteSpecificTask(id);
+                        return "REFRESH";
+                    }
+                }
+                default -> {
+                    // Сюда попадет всё, что не соответствует строгим правилам (например, "p", "Edit", "m")
+                    System.out.println("Invalid command. Use uppercase single letter (P, N, M, S, E, D).");
+                    // Небольшая пауза, чтобы пользователь успел прочитать сообщение об ошибке перед перерисовкой
+                    try { Thread.sleep(1500); } catch (InterruptedException e) {}
                 }
             }
-
-            // 3. Действие: Удаление
-            if (input.equals("D")) {
-                Long id = promptForTaskId("Enter Task ID to delete: ", tasks);
-                if (id != null) {
-                    deleteSpecificTask(id);
-                    return "REFRESH";
-                }
-            }
-
-            System.out.println("Invalid command. Use P, N, B, M, S, E, or D.");
         }
     }
 
     // === ДЕЙСТВИЯ ===
 
     private void createTask() {
-        System.out.println("\n--- CREATE TASK ---");
-        System.out.print("Title: ");
-        String title = scanner.nextLine();
-        System.out.print("Description: ");
-        String description = scanner.nextLine();
+        clearScreen();
+        System.out.println("--- CREATE TASK ---");
+        System.out.println("Type 'M' at any prompt to return to Main Menu");
+        System.out.println("-------------------------------------------------");
+
+        String title = readInputWithEscape("Title: ");
+        if (title == null) return; // Пользователь ввел 'M', выходим
+
+        String description = readInputWithEscape("Description: ");
+        if (description == null) return; // Пользователь ввел 'M', выходим
 
         taskService.createTask(title, description);
-        System.out.println("Task created successfully!");
+        System.out.println("\nTask created successfully!");
+    }
+
+    private void editSpecificTask(Long id) {
+        Optional<Task> optionalTask = taskService.getTaskById(id);
+        if (optionalTask.isEmpty()) return;
+
+        Task task = optionalTask.get();
+
+        clearScreen();
+        System.out.println("--- EDIT TASK #" + id + " ---");
+        System.out.println("Type 'M' at any prompt to cancel and return to Menu");
+        System.out.println("Current Title: " + task.getTitle());
+        System.out.println("Current Desc : " + task.getDescription());
+        System.out.println("Current Stat : " + task.getStatus());
+        System.out.println("----------------------------------------");
+
+        String title = readInputWithEscape("New Title (or Enter to skip): ");
+        if (title == null) return;
+        if (title.isBlank()) title = task.getTitle();
+
+        String description = readInputWithEscape("New Description (or Enter to skip): ");
+        if (description == null) return;
+        if (description.isBlank()) description = task.getDescription();
+
+        System.out.println("Available statuses: PENDING, ACTIVE, DONE, CANCEL.");
+        String statusInput = readInputWithEscape("New Status ([P] | [A] | [D] | [C] or full name, or Enter to skip): ");
+        if (statusInput == null) return;
+
+        TaskStatus status = task.getStatus();
+        if (!statusInput.isBlank()) {
+            TaskStatus newStatus = parseStatus(statusInput);
+            if (newStatus != null) {
+                status = newStatus;
+            } else {
+                System.out.println("Invalid status format. Keeping old status: " + task.getStatus());
+            }
+        }
+
+        taskService.updateTask(id, title, description, status);
+        System.out.println("\nTask updated successfully!");
     }
 
     private Long promptForTaskId(String prompt, List<Task> validTasks) {
@@ -219,42 +272,6 @@ public class ConsoleUI {
         } catch (NumberFormatException e) {
             System.out.println("Invalid ID format. Please enter a number.");
             return null;
-        }
-    }
-
-    private void editSpecificTask(Long id) {
-        Optional<Task> optionalTask = taskService.getTaskById(id);
-        if (optionalTask.isPresent()) {
-            Task task = optionalTask.get();
-
-            clearScreen();
-            System.out.println("--- EDIT TASK #" + id + " ---");
-            System.out.println("Current Title: " + task.getTitle());
-            System.out.println("Current Desc : " + task.getDescription());
-            System.out.println("Current Stat : " + task.getStatus());
-            System.out.println("----------------------------------------");
-
-            System.out.print("New Title (or Enter to skip): ");
-            String title = scanner.nextLine();
-            if (title.isBlank()) title = task.getTitle();
-
-            System.out.print("New Description (or Enter to skip): ");
-            String description = scanner.nextLine();
-            if (description.isBlank()) description = task.getDescription();
-
-            System.out.print("New Status (TODO, IN_PROGRESS, DONE) (or Enter to skip): ");
-            String statusInput = scanner.nextLine();
-            TaskStatus status = task.getStatus();
-            if (!statusInput.isBlank()) {
-                try {
-                    status = TaskStatus.valueOf(statusInput.toUpperCase());
-                } catch (IllegalArgumentException e) {
-                    System.out.println("Invalid status, keeping old one.");
-                }
-            }
-
-            taskService.updateTask(id, title, description, status);
-            System.out.println("\nTask updated successfully!");
         }
     }
 
@@ -369,6 +386,68 @@ public class ConsoleUI {
     private void clearScreen() {
         System.out.print("\033[H\033[2J");
         System.out.flush();
+    }
+
+    // === УМНЫЕ ХЕЛПЕРЫ ===
+
+    /**
+     * Читает ввод пользователя. Если введено "M", возвращает null (сигнал к выходу в меню).
+     */
+    private String readInputWithEscape(String prompt) {
+        System.out.print(prompt);
+        String input = scanner.nextLine().trim();
+
+        // Строгий выход: только заглавная M
+        if (input.equals("M")) {
+            return null;
+        }
+        return input;
+    }
+
+    /**
+     * Строго парсит команду действия.
+     * Разрешает ТОЛЬКО:
+     * 1. Одну заглавную букву (P, N, M, S, E, D)
+     * Возвращает "INVALID", если ввод не соответствует правилам.
+     */
+    private String parseAction(String input) {
+        if (input == null || input.isBlank()) {
+            return "INVALID";
+        }
+
+        return switch (input) {
+            // Выход / Назад
+            case "M" -> "EXIT";
+            // Поиск
+            case "S" -> "SEARCH";
+            // Следующая страница
+            case "N" -> "NEXT";
+            // Предыдущая страница
+            case "P" -> "PREV";
+            // Редактировать
+            case "E" -> "EDIT";
+            // Удалить
+            case "D" -> "DELETE";
+            default -> "INVALID";
+        };
+    }
+
+    /**
+     * Парсит статус из строки. Поддерживает первую букву (P, A, D, C) или полное слово.
+     * Возвращает null, если строка пустая или нераспознаваемая.
+     */
+    private TaskStatus parseStatus(String input) {
+        if (input == null || input.isBlank()) {
+            return null;
+        }
+
+        return switch (input) {
+            case "P", "PENDING", "pending" -> TaskStatus.PENDING;
+            case "A", "ACTIVE", "active" -> TaskStatus.ACTIVE;
+            case "D", "DONE", "done" -> TaskStatus.DONE;
+            case "C", "CANCEL", "cancel" -> TaskStatus.CANCEL;
+            default -> null;
+        };
     }
 
     private int readInt(String prompt) {
