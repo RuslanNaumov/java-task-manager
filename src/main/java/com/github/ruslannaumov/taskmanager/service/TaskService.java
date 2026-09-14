@@ -1,8 +1,10 @@
 package com.github.ruslannaumov.taskmanager.service;
 
 import com.github.ruslannaumov.taskmanager.dao.ITaskDao;
+import com.github.ruslannaumov.taskmanager.exception.ValidationException;
 import com.github.ruslannaumov.taskmanager.model.Task;
 import com.github.ruslannaumov.taskmanager.model.TaskStatus;
+import com.github.ruslannaumov.taskmanager.util.ValidationUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -20,9 +22,8 @@ public class TaskService implements ITaskService {
 
     @Override
     public Task createTask(String title, String description) {
-        if (title == null || title.isBlank()) {
-            throw new IllegalArgumentException("Заголовок задачи не может быть пустым!");
-        }
+        ValidationUtils.validateTitle(title);
+        ValidationUtils.validateDescription(description);
 
         Task task = new Task(title, description);
         taskDao.save(task);
@@ -42,20 +43,25 @@ public class TaskService implements ITaskService {
 
     @Override
     public void updateTask(Long id, String title, String description, TaskStatus status) {
+        // 1. Валидируем входящие данные
+        ValidationUtils.validateTitle(title);
+        ValidationUtils.validateDescription(description);
+        ValidationUtils.validateStatus(status);
+
+        // 2. Ищем задачу
         Optional<Task> taskOptional = taskDao.findById(id);
-
-        if (taskOptional.isPresent()) {
-            // Достаем объект из Optional
-            Task task = taskOptional.get();
-
-            task.setTitle(title);
-            task.setDescription(description);
-            task.setStatus(status);
-
-            taskDao.update(task);
-        } else {
-            System.out.println("Task with ID " + id + " not found.");
+        if (taskOptional.isEmpty()) {
+            throw new ValidationException("Задача с ID " + id + " не найдена.");
         }
+
+        // 3. Обновляем и сохраняем
+        Task task = taskOptional.get();
+        task.setTitle(title);
+        task.setDescription(description);
+        task.setStatus(status);
+
+        taskDao.update(task);
+        logger.info("Сервис обновил задачу ID: {}", id);
     }
 
     @Override
@@ -71,8 +77,7 @@ public class TaskService implements ITaskService {
     @Override
     public int getTotalPages(int size) {
         int totalTasks = taskDao.count();
-        if (totalTasks == 0) return 1; // Если задач нет, всё равно 1 страница
-        // Делим общее число задач на размер страницы и округляем вверх
+        if (totalTasks == 0) return 1;
         return (int) Math.ceil((double) totalTasks / size);
     }
 

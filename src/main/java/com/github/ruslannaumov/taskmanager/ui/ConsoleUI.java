@@ -1,9 +1,11 @@
 package com.github.ruslannaumov.taskmanager.ui;
 
 import com.github.ruslannaumov.taskmanager.config.AppConfig;
+import com.github.ruslannaumov.taskmanager.exception.ValidationException;
 import com.github.ruslannaumov.taskmanager.model.Task;
 import com.github.ruslannaumov.taskmanager.model.TaskStatus;
 import com.github.ruslannaumov.taskmanager.service.ITaskService;
+import com.github.ruslannaumov.taskmanager.util.ValidationUtils;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -37,8 +39,8 @@ public class ConsoleUI {
             switch (choice) {
                 case 1 -> createTask();
                 case 2 -> viewTasks();
-                case 3 -> clearDatabaseAndExit(); // <-- НОВЫЙ ПУНКТ
-                case 4 -> {                       // <-- EXIT сдвинут на 4
+                case 3 -> clearDatabaseAndExit();
+                case 4 -> {
                     running = false;
                     System.out.println("Goodbye!");
                 }
@@ -64,72 +66,57 @@ public class ConsoleUI {
 
     // === ГЛАВНЫЙ ЦИКЛ УПРАВЛЕНИЯ ЗАДАЧАМИ ===
     private void viewTasks() {
-        String currentQuery = null; // null означает "показать все задачи"
+        String currentQuery = null;
 
         while (true) {
-            // 1. Определяем, какие данные загружать
             List<Task> tasks;
-
             if (currentQuery == null) {
                 tasks = taskService.getAllTasks();
             } else {
                 tasks = taskService.searchTasks(currentQuery);
-
-                // ЕСЛИ ПОИСК НЕ ДАЛ РЕЗУЛЬТАТОВ — НЕ РИСУЕМ ТАБЛИЦУ
                 if (tasks.isEmpty()) {
                     clearScreen();
                     System.out.printf("No tasks found for query: \"%s\"%n", currentQuery);
-                    System.out.println("\nEnter new search query, [M] for Main Menu, or press Enter to show all tasks:");
+                    System.out.println("\nEnter new search query, [M] for Menu, or press Enter to show all tasks:");
                     System.out.print("> ");
                     String input = scanner.nextLine().trim();
 
                     if (input.equalsIgnoreCase("M")) {
                         clearScreen();
-                        return; // Выход в главное меню
+                        return;
                     } else if (input.isBlank()) {
-                        currentQuery = null; // Сброс к "Все задачи"
+                        currentQuery = null;
                     } else {
-                        currentQuery = input; // Новый запрос
+                        currentQuery = input;
                     }
-                    continue; // Перезапускаем цикл с новым currentQuery
+                    continue;
                 }
             }
 
-            // 2. Отображаем таблицу и обрабатываем действия
             String action = displayTaskListAndHandleActions(tasks, currentQuery != null);
 
-            // 3. Реагируем на действие
             if (action.equals("EXIT")) {
                 clearScreen();
-                return; // Выход в главное меню
-            }
-            else if (action.equals("SEARCH")) {
+                return;
+            } else if (action.equals("SEARCH")) {
                 clearScreen();
                 System.out.print("Enter search query (or press Enter to show all tasks): ");
                 String newQuery = scanner.nextLine().trim();
-
                 if (newQuery.isBlank()) {
-                    currentQuery = null; // Сброс к "Все задачи"
+                    currentQuery = null;
                 } else {
-                    currentQuery = newQuery; // Установка нового фильтра
+                    currentQuery = newQuery;
                 }
-                // Цикл продолжается, данные перезагрузятся с новым currentQuery
             }
-            // Если action.equals("REFRESH"), цикл просто продолжается,
-            // заново загружая актуальные данные для текущего currentQuery (все или поиск)
         }
     }
 
-    // === УНИВЕРСАЛЬНЫЙ ЭКРАН ТАБЛИЦЫ ===
-    // Возвращает: "EXIT" (выход), "SEARCH" (перейти к поиску), "REFRESH" (обновить таблицу)
     private String displayTaskListAndHandleActions(List<Task> tasks, boolean isSearchMode) {
         int currentPage = 1;
         int totalPages = Math.max(1, (int) Math.ceil((double) tasks.size() / PAGE_SIZE));
 
         while (true) {
             clearScreen();
-
-            // Защита от выхода за границы страниц
             if (currentPage > totalPages) currentPage = totalPages;
             if (currentPage < 1) currentPage = 1;
 
@@ -138,7 +125,6 @@ public class ConsoleUI {
             List<Task> pageTasks = tasks.subList(fromIndex, toIndex);
 
             printTableHeader();
-
             if (pageTasks.isEmpty()) {
                 System.out.println("No tasks found.");
             } else {
@@ -146,40 +132,24 @@ public class ConsoleUI {
                     printTaskRow(task);
                 }
             }
-
             System.out.printf("Page %d of %d%n", currentPage, totalPages);
-
             System.out.println("[N]ext | [P]rev | [M]enu | [S]earch");
             System.out.println("OR type [E] to Edit | [D] to Delete");
             System.out.print("> ");
 
-            // ЧИТАЕМ ВВОД БЕЗ .toUpperCase(), чтобы сохранить оригинальный регистр для строгой проверки
             String rawInput = scanner.nextLine().trim();
-
-            // Передаем ввод в наш строгий парсер
             String action = parseAction(rawInput);
 
-            // Обрабатываем результат парсинга
             switch (action) {
-                case "EXIT" -> {
-                    return "EXIT";
-                }
-                case "SEARCH" -> {
-                    return "SEARCH";
-                }
-                case "NEXT" -> {
-                    if (currentPage < totalPages) currentPage++;
-                    continue;
-                }
-                case "PREV" -> {
-                    if (currentPage > 1) currentPage--;
-                    continue;
-                }
+                case "EXIT" -> { return "EXIT"; }
+                case "SEARCH" -> { return "SEARCH"; }
+                case "NEXT" -> { if (currentPage < totalPages) currentPage++; continue; }
+                case "PREV" -> { if (currentPage > 1) currentPage--; continue; }
                 case "EDIT" -> {
                     Long id = promptForTaskId("Enter Task ID to edit: ", tasks);
                     if (id != null) {
                         editSpecificTask(id);
-                        return "REFRESH"; // Сигнал перезагрузить текущий вид
+                        return "REFRESH";
                     }
                 }
                 case "DELETE" -> {
@@ -190,16 +160,14 @@ public class ConsoleUI {
                     }
                 }
                 default -> {
-                    // Сюда попадет всё, что не соответствует строгим правилам (например, "p", "Edit", "m")
                     System.out.println("Invalid command. Use uppercase single letter (P, N, M, S, E, D).");
-                    // Небольшая пауза, чтобы пользователь успел прочитать сообщение об ошибке перед перерисовкой
                     try { Thread.sleep(1500); } catch (InterruptedException e) {}
                 }
             }
         }
     }
 
-    // === ДЕЙСТВИЯ ===
+    // === ДЕЙСТВИЯ С МГНОВЕННОЙ ВАЛИДАЦИЕЙ ===
 
     private void createTask() {
         clearScreen();
@@ -207,54 +175,131 @@ public class ConsoleUI {
         System.out.println("Type 'M' at any prompt to return to Main Menu");
         System.out.println("-------------------------------------------------");
 
-        String title = readInputWithEscape("Title: ");
-        if (title == null) return; // Пользователь ввел 'M', выходим
+        // 1. Валидируем Title СРАЗУ в цикле
+        String title = readValidatedTitle();
+        if (title == null) return; // Нажал 'M'
 
-        String description = readInputWithEscape("Description: ");
-        if (description == null) return; // Пользователь ввел 'M', выходим
+        // 2. Валидируем Description СРАЗУ в цикле
+        String description = readValidatedDescription();
+        if (description == null) return; // Нажал 'M'
 
-        taskService.createTask(title, description);
-        System.out.println("\nTask created successfully!");
+        try {
+            taskService.createTask(title, description);
+            System.out.println("\nTask created successfully!");
+        } catch (ValidationException e) {
+            System.out.println("\nОшибка: " + e.getMessage());
+        }
     }
 
     private void editSpecificTask(Long id) {
         Optional<Task> optionalTask = taskService.getTaskById(id);
-        if (optionalTask.isEmpty()) return;
+        if (optionalTask.isEmpty()) {
+            System.out.println("\nЗадача не найдена.");
+            return;
+        }
 
         Task task = optionalTask.get();
 
-        clearScreen();
-        System.out.println("--- EDIT TASK #" + id + " ---");
-        System.out.println("Type 'M' at any prompt to cancel and return to Menu");
-        System.out.println("Current Title: " + task.getTitle());
-        System.out.println("Current Desc : " + task.getDescription());
-        System.out.println("Current Stat : " + task.getStatus());
-        System.out.println("----------------------------------------");
+        // Цикл позволяет попробовать снова, если на последнем шаге (сервис) возникнет ошибка
+        while (true) {
+            clearScreen();
+            System.out.println("--- EDIT TASK #" + id + " ---");
+            System.out.println("Type 'M' at any prompt to cancel and return to Menu");
+            System.out.println("Current Title: " + task.getTitle());
+            System.out.println("Current Desc : " + task.getDescription());
+            System.out.println("Current Stat : " + task.getStatus());
+            System.out.println("----------------------------------------");
 
-        String title = readInputWithEscape("New Title (or Enter to skip): ");
-        if (title == null) return;
-        if (title.isBlank()) title = task.getTitle();
+            // Валидация с возможностью пропуска (Enter)
+            String title = readValidatedTitleWithSkip("New Title (or Enter to skip): ", task.getTitle());
+            if (title == null) return;
 
-        String description = readInputWithEscape("New Description (or Enter to skip): ");
-        if (description == null) return;
-        if (description.isBlank()) description = task.getDescription();
+            String description = readValidatedDescriptionWithSkip("New Description (or Enter to skip): ", task.getDescription());
+            if (description == null) return;
 
-        System.out.println("Available statuses: PENDING, ACTIVE, DONE, CANCEL.");
-        String statusInput = readInputWithEscape("New Status ([P] | [A] | [D] | [C] or full name, or Enter to skip): ");
-        if (statusInput == null) return;
+            System.out.println("Available statuses: PENDING, ACTIVE, DONE, CANCEL.");
+            TaskStatus status = readValidatedStatusWithSkip("New Status ([P] | [A] | [D] | [C] or full name, or Enter to skip): ", task.getStatus());
+            if (status == null) return;
 
-        TaskStatus status = task.getStatus();
-        if (!statusInput.isBlank()) {
-            TaskStatus newStatus = parseStatus(statusInput);
-            if (newStatus != null) {
-                status = newStatus;
-            } else {
-                System.out.println("Invalid status format. Keeping old status: " + task.getStatus());
+            try {
+                taskService.updateTask(id, title, description, status);
+                System.out.println("\nTask updated successfully!");
+                break; // Успех, выходим из цикла редактирования
+            } catch (ValidationException e) {
+                System.out.println("\nОшибка: " + e.getMessage());
             }
         }
+    }
 
-        taskService.updateTask(id, title, description, status);
-        System.out.println("\nTask updated successfully!");
+    // === ХЕЛПЕРЫ МГНОВЕННОЙ ВАЛИДАЦИИ ===
+
+    private String readValidatedTitle() {
+        while (true) {
+            String input = readInputWithEscape("Title: ");
+            if (input == null) return null; // 'M'
+            try {
+                ValidationUtils.validateTitle(input);
+                return input; // Успех
+            } catch (ValidationException e) {
+                System.out.println(e.getMessage() + " Попробуйте снова.");
+            }
+        }
+    }
+
+    private String readValidatedTitleWithSkip(String prompt, String currentValue) {
+        while (true) {
+            String input = readInputWithEscape(prompt);
+            if (input == null) return null; // 'M'
+            if (input.isBlank()) return currentValue; // Пропуск, оставляем старое (оно уже валидно)
+            try {
+                ValidationUtils.validateTitle(input);
+                return input;
+            } catch (ValidationException e) {
+                System.out.println(e.getMessage() + " Попробуйте снова.");
+            }
+        }
+    }
+
+    private String readValidatedDescription() {
+        while (true) {
+            String input = readInputWithEscape("Description: ");
+            if (input == null) return null; // 'M'
+            try {
+                ValidationUtils.validateDescription(input);
+                return input;
+            } catch (ValidationException e) {
+                System.out.println(e.getMessage() + " Попробуйте снова.");
+            }
+        }
+    }
+
+    private String readValidatedDescriptionWithSkip(String prompt, String currentValue) {
+        while (true) {
+            String input = readInputWithEscape(prompt);
+            if (input == null) return null; // 'M'
+            if (input.isBlank()) return currentValue; // Пропуск
+            try {
+                ValidationUtils.validateDescription(input);
+                return input;
+            } catch (ValidationException e) {
+                System.out.println(e.getMessage() + " Попробуйте снова.");
+            }
+        }
+    }
+
+    private TaskStatus readValidatedStatusWithSkip(String prompt, TaskStatus currentStatus) {
+        while (true) {
+            String input = readInputWithEscape(prompt);
+            if (input == null) return null; // 'M'
+            if (input.isBlank()) return currentStatus; // Пропуск
+
+            TaskStatus newStatus = parseStatus(input);
+            if (newStatus != null) {
+                return newStatus;
+            } else {
+                System.out.println("Неверный формат статуса. Попробуйте снова (P, A, D, C).");
+            }
+        }
     }
 
     private Long promptForTaskId(String prompt, List<Task> validTasks) {
@@ -286,7 +331,6 @@ public class ConsoleUI {
         }
     }
 
-    // === ОЧИСТКА И ВЫХОД ===
     private void clearDatabaseAndExit() {
         clearScreen();
         System.out.println("WARNING: DANGEROUS ACTION");
@@ -308,10 +352,7 @@ public class ConsoleUI {
             } else {
                 System.out.println("Failed to delete some files. They might be in use by another program.");
             }
-
-            // Даем пользователю 1 секунду прочитать сообщение перед закрытием
             try { Thread.sleep(1000); } catch (InterruptedException e) {}
-            // Принудительное завершение работы JVM
             System.exit(0);
         } else {
             System.out.println("\nOperation cancelled.");
@@ -388,59 +429,30 @@ public class ConsoleUI {
         System.out.flush();
     }
 
-    // === УМНЫЕ ХЕЛПЕРЫ ===
-
-    /**
-     * Читает ввод пользователя. Если введено "M", возвращает null (сигнал к выходу в меню).
-     */
     private String readInputWithEscape(String prompt) {
         System.out.print(prompt);
         String input = scanner.nextLine().trim();
-
-        // Строгий выход: только заглавная M
         if (input.equals("M")) {
             return null;
         }
         return input;
     }
 
-    /**
-     * Строго парсит команду действия.
-     * Разрешает ТОЛЬКО:
-     * 1. Одну заглавную букву (P, N, M, S, E, D)
-     * Возвращает "INVALID", если ввод не соответствует правилам.
-     */
     private String parseAction(String input) {
-        if (input == null || input.isBlank()) {
-            return "INVALID";
-        }
-
+        if (input == null || input.isBlank()) return "INVALID";
         return switch (input) {
-            // Выход / Назад
             case "M" -> "EXIT";
-            // Поиск
             case "S" -> "SEARCH";
-            // Следующая страница
             case "N" -> "NEXT";
-            // Предыдущая страница
             case "P" -> "PREV";
-            // Редактировать
             case "E" -> "EDIT";
-            // Удалить
             case "D" -> "DELETE";
             default -> "INVALID";
         };
     }
 
-    /**
-     * Парсит статус из строки. Поддерживает первую букву (P, A, D, C) или полное слово.
-     * Возвращает null, если строка пустая или нераспознаваемая.
-     */
     private TaskStatus parseStatus(String input) {
-        if (input == null || input.isBlank()) {
-            return null;
-        }
-
+        if (input == null || input.isBlank()) return null;
         return switch (input) {
             case "P", "PENDING", "pending" -> TaskStatus.PENDING;
             case "A", "ACTIVE", "active" -> TaskStatus.ACTIVE;

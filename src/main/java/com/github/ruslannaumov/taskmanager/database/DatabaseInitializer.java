@@ -14,7 +14,7 @@ public class DatabaseInitializer {
                 CREATE TABLE IF NOT EXISTS tasks (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     title TEXT NOT NULL,
-                    description TEXT,
+                    description TEXT NOT NULL ,
                     status TEXT NOT NULL,
                     created_at TEXT,
                     updated_at TEXT
