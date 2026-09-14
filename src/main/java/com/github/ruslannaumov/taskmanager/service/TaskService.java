@@ -62,4 +62,17 @@ public class TaskService implements ITaskService {
     public void deleteTask(Long id) {
         taskDao.deleteById(id);
     }
+
+    @Override
+    public List<Task> getTasksByPage(int page, int size) {
+        return taskDao.findAllWithPagination(page, size);
+    }
+
+    @Override
+    public int getTotalPages(int size) {
+        int totalTasks = taskDao.count();
+        if (totalTasks == 0) return 1; // Если задач нет, всё равно 1 страница
+        // Делим общее число задач на размер страницы и округляем вверх
+        return (int) Math.ceil((double) totalTasks / size);
+    }
 }

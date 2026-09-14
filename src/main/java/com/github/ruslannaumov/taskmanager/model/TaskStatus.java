@@ -2,8 +2,9 @@ package com.github.ruslannaumov.taskmanager.model;
 
 public enum TaskStatus {
     PENDING("Ожидает"),
-    IN_PROGRESS("В работе"),
-    DONE("Завершена");
+    ACTIVE("В работе"),
+    DONE("Завершена"),
+    CANCEL("Отмена");
 
     private final String displayName;
 

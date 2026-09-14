@@ -12,4 +12,6 @@ public interface ITaskService {
     void updateTask(Long id, String title, String description, TaskStatus status);
     void deleteTask(Long id);
     Optional<Task> getTaskById(Long id);
+    List<Task> getTasksByPage(int page, int size);
+    int getTotalPages(int size);
 }

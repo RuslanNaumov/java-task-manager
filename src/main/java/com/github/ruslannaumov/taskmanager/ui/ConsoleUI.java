@@ -4,6 +4,7 @@ import com.github.ruslannaumov.taskmanager.model.Task;
 import com.github.ruslannaumov.taskmanager.model.TaskStatus;
 import com.github.ruslannaumov.taskmanager.service.ITaskService;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.Scanner;
@@ -12,6 +13,12 @@ public class ConsoleUI {
 
     private final ITaskService taskService;
     private final Scanner scanner;
+    private static final int PAGE_SIZE = 5;
+    // === КОНСТАНТЫ ШИРИНЫ КОЛОНОК ===
+    private static final int COL_ID = 5;
+    private static final int COL_TITLE = 30;
+    private static final int COL_DESC = 40;
+    private static final int COL_STATUS = 15;
 
     public ConsoleUI(ITaskService taskService) {
         this.taskService = taskService;
@@ -20,146 +27,243 @@ public class ConsoleUI {
 
     public void start() {
         boolean running = true;
-        System.out.println("Welcome to Java Task Manager!");
 
         while (running) {
-            printMenu();
+            clearScreen();
+            printMainMenu();
+
             int choice = readInt("Select option: ");
 
             switch (choice) {
                 case 1 -> createTask();
-                case 2 -> listTasks();
-                case 3 -> updateTask();
-                case 4 -> deleteTask();
-                case 5 -> {
+                case 2 -> editTask();
+                case 3 -> deleteTask();
+                case 4 -> {
                     running = false;
                     System.out.println("Goodbye!");
                 }
-                default -> System.out.println("Invalid option. Try again.");
+                default -> {
+                    System.out.println("Invalid option.");
+                }
             }
         }
     }
 
-    private void printMenu() {
-        System.out.println("\n--- MAIN MENU ---");
-        System.out.println("1. ➕ Add Task");
-        System.out.println("2. 📋 List Tasks");
-        System.out.println("3. 🔄 Update Task");
-        System.out.println("4. 🗑️ Delete Task");
-        System.out.println("5. 🚪 Exit");
-        System.out.println("-----------------");
-    }
+    private Long viewTask(String actionHint) {
+        int currentPage = 1;
 
-    private void createTask() {
-        System.out.print("Enter title: ");
-        String title = scanner.nextLine();
-        System.out.print("Enter description: ");
-        String description = scanner.nextLine();
+        while (true) {
+            clearScreen();
 
-        taskService.createTask(title, description);
-        System.out.println("Task created!");
-    }
+            int totalPages = taskService.getTotalPages(PAGE_SIZE);
+            if (currentPage > totalPages) currentPage = totalPages;
+            if (currentPage < 1) currentPage = 1;
 
-    private void listTasks() {
-        List<Task> tasks = taskService.getAllTasks();
-        if (tasks.isEmpty()) {
-            System.out.println("No tasks found.");
-            return;
-        }
+            List<Task> tasks = taskService.getTasksByPage(currentPage, PAGE_SIZE);
 
-        System.out.println("\n--- TASKS ---");
-        for (Task task : tasks) {
-            System.out.printf("[%d] %s | Status: %s | Desc: %s%n",
-                    task.getId(),
-                    task.getTitle(),
-                    task.getStatus(),
-                    task.getDescription());
-        }
-    }
+            // Шапка таблицы
+            System.out.println("=".repeat(COL_ID + COL_TITLE + COL_DESC + COL_STATUS + 10));
+            System.out.printf("%" + COL_ID + "s | %-" + COL_TITLE + "s | %-" + COL_DESC + "s | %s%n",
+                    "ID", "TITLE", "DESCRIPTION", "STATUS");
+            System.out.println("=".repeat(COL_ID + COL_TITLE + COL_DESC + COL_STATUS + 10));
 
-    private void updateTask() {
-        listTasks();
+            if (tasks.isEmpty()) {
+                System.out.println("No tasks found.");
+            } else {
+                for (Task task : tasks) {
+                    printTaskRow(task);
+                }
+            }
 
-        Long id = readLong("Enter Task ID to update: ");
-        if (id == -1L) {
-            System.out.println("Invalid ID format.");
-            return;
-        }
+            System.out.printf("Page %d of %d%n", currentPage, totalPages);
+            System.out.println("[N]ext | [P]rev | [B]ack");
+            System.out.println(actionHint);
+            System.out.print("> ");
 
-        // 1. Получаем текущую задачу из сервиса
-        Optional<Task> taskOptional = taskService.getTaskById(id);
+            String input = scanner.nextLine().trim();
 
-        if (taskOptional.isEmpty()) {
-            System.out.println("Task with ID " + id + " not found.");
-            return;
-        }
+            if (input.equalsIgnoreCase("B")) return null;
+            if (input.equalsIgnoreCase("N")) { if (currentPage < totalPages) currentPage++; continue; }
+            if (input.equalsIgnoreCase("P")) { if (currentPage > 1) currentPage--; continue; }
 
-        Task existingTask = taskOptional.get();
-
-        // 2. Запрашиваем новые значения, предлагая текущие по умолчанию
-        System.out.println("\n--- Updating Task ID: " + id + " ---");
-
-        System.out.println("Current title: [" + existingTask.getTitle() + "]");
-        System.out.print("Enter new title (or press Enter to keep current): ");
-        String newTitle = scanner.nextLine().trim();
-        if (newTitle.isBlank()) {
-            newTitle = existingTask.getTitle(); // Оставляем старое значение
-        }
-
-        System.out.println("Current description: [" + existingTask.getDescription() + "]");
-        System.out.print("Enter new description (or press Enter to keep current): ");
-        String newDesc = scanner.nextLine().trim();
-        if (newDesc.isBlank()) {
-            newDesc = existingTask.getDescription(); // Оставляем старое значение
-        }
-
-        System.out.println("Current status: [" + existingTask.getStatus() + "]");
-        System.out.print("Enter new status (or press Enter to keep current): ");
-        String statusInput = scanner.nextLine().trim();
-
-        TaskStatus newStatus = existingTask.getStatus(); // По умолчанию оставляем старый статус
-
-        if (!statusInput.isBlank()) {
             try {
-                newStatus = TaskStatus.valueOf(statusInput.toUpperCase());
-            } catch (IllegalArgumentException e) {
-                System.out.println("⚠️ Invalid status format. Keeping current status: " + existingTask.getStatus());
+                long id = Long.parseLong(input);
+                if (taskService.getTaskById(id).isPresent()) {
+                    return id;
+                } else {
+                    System.out.println("Task with ID " + id + " not found. Try again.");
+                }
+            } catch (NumberFormatException e) {
+                // Игнорируем
             }
         }
+    }
 
-        // 3. Отправляем обновленные данные в сервис
-        taskService.updateTask(id, newTitle, newDesc, newStatus);
-        System.out.println("Task updated successfully!");
+    private void editTask() {
+        Long id = viewTask("OR Enter Task ID to edit");
+        if (id != null) {
+            Optional<Task> optionalTask = taskService.getTaskById(id);
+
+            if (optionalTask.isPresent()) {
+                Task task = optionalTask.get();
+
+                clearScreen();
+                System.out.println("--- EDIT TASK #" + id + " ---");
+                System.out.println("Title: " + task.getTitle());
+                System.out.println("Description: " + task.getDescription());
+                System.out.println("Status: " + task.getStatus());
+                System.out.print("New Title (or Enter to skip): ");
+                String title = scanner.nextLine();
+                if (title.isBlank()) title = task.getTitle();
+
+                System.out.print("New Description (or Enter to skip): ");
+                String description = scanner.nextLine();
+                if (description.isBlank()) description = task.getDescription();
+
+                System.out.print("New Status (PENDING, ACTIVE, DONE, CANCEL) (or Enter to skip): ");
+                String statusInput = scanner.nextLine();
+                TaskStatus status = task.getStatus();
+                if (!statusInput.isBlank()) {
+                    try {
+                        status = TaskStatus.valueOf(statusInput.toUpperCase());
+                    } catch (IllegalArgumentException e) {
+                        System.out.println("Invalid status, keeping old one.");
+                    }
+                }
+
+                taskService.updateTask(id, title, description, status);
+                System.out.println("Task updated!");
+            }
+        }
     }
 
     private void deleteTask() {
-        listTasks();
-        Long id = readLong("Enter Task ID to delete: ");
-        if (id == -1L) {
-            System.out.println("Invalid ID format.");
-            return;
+        Long id = viewTask("OR Enter Task ID to delete");
+
+        if (id != null) {
+            System.out.print("Are you sure you want to delete task #" + id + "? (y/n): ");
+            String confirm = scanner.nextLine();
+            if (confirm.equalsIgnoreCase("y")) {
+                taskService.deleteTask(id);
+                System.out.println("Task deleted!");
+            } else {
+                System.out.println("Deletion cancelled.");
+            }
         }
-        taskService.deleteTask(id);
-        System.out.println("Task deleted!");
     }
 
-    // Вспомогательный метод для чтения Int
+    private void createTask() {
+        clearScreen();
+        System.out.println("--- CREATE TASK ---");
+        System.out.print("Title: ");
+        String title = scanner.nextLine();
+        System.out.print("Description: ");
+        String description = scanner.nextLine();
+
+        taskService.createTask(title, description);
+        System.out.println("Task created successfully!");
+    }
+
+    /**
+     * Разбивает длинный текст на строки заданной ширины.
+     */
+    private List<String> wrapText(String text, int width) {
+        List<String> lines = new ArrayList<>();
+        if (text == null || text.isEmpty()) {
+            return lines;
+        }
+
+        // Если текст влезает целиком
+        if (text.length() <= width) {
+            lines.add(text);
+            return lines;
+        }
+
+        String[] words = text.split(" ");
+        StringBuilder currentLine = new StringBuilder();
+
+        for (String word : words) {
+            // Если одно слово длиннее всей колонки, режем его
+            while (word.length() > width) {
+                if (currentLine.length() > 0) {
+                    lines.add(currentLine.toString());
+                    currentLine = new StringBuilder();
+                }
+                lines.add(word.substring(0, width));
+                word = word.substring(width);
+            }
+
+            // Пытаемся добавить слово в текущую строку
+            if (currentLine.length() == 0) {
+                currentLine.append(word);
+            } else if (currentLine.length() + 1 + word.length() <= width) {
+                currentLine.append(" ").append(word);
+            } else {
+                // Места нет, начинаем новую строку
+                lines.add(currentLine.toString());
+                currentLine = new StringBuilder();
+                currentLine.append(word);
+            }
+        }
+
+        if (currentLine.length() > 0) {
+            lines.add(currentLine.toString());
+        }
+        return lines;
+    }
+
+    private void printTaskRow(Task task) {
+        List<String> titleLines = wrapText(task.getTitle(), COL_TITLE);
+        List<String> descLines = wrapText(task.getDescription(), COL_DESC);
+
+        // Количество строк, которое займет эта задача
+        int linesCount = Math.max(titleLines.size(), descLines.size());
+        if (linesCount == 0) linesCount = 1; // Если все поля пустые
+
+        for (int i = 0; i < linesCount; i++) {
+            // ID выводим только на первой строке
+            String idStr = (i == 0) ? String.format("%" + COL_ID + "d", task.getId()) : " ".repeat(COL_ID);
+
+            // Title
+            String titleStr = (i < titleLines.size())
+                    ? String.format("%-" + COL_TITLE + "s", titleLines.get(i))
+                    : " ".repeat(COL_TITLE);
+
+            // Description
+            String descStr = (i < descLines.size())
+                    ? String.format("%-" + COL_DESC + "s", descLines.get(i))
+                    : " ".repeat(COL_DESC);
+
+            // Status выводим только на первой строке
+            String statusStr = (i == 0) ? task.getStatus().toString() : "";
+
+            System.out.printf("%s | %s | %s | %s%n", idStr, titleStr, descStr, statusStr);
+        }
+        System.out.println("-".repeat(COL_ID + COL_TITLE + COL_DESC + COL_STATUS + 10));
+    }
+
+    private void printMainMenu() {
+        System.out.println("");
+        System.out.println("=== TASK MANAGER ===");
+        System.out.println("1. ➕ Add Task");
+        System.out.println("2. 📋 View Tasks");
+        System.out.println("3. 🗑️ Delete Task");
+        System.out.println("4. 🚪 Exit");
+        System.out.println("====================");
+        System.out.println("");
+    }
+
+    private void clearScreen() {
+        System.out.print("\033[H\033[2J");
+        System.out.flush();
+    }
+
     private int readInt(String prompt) {
         System.out.print(prompt);
         try {
             return Integer.parseInt(scanner.nextLine());
         } catch (NumberFormatException e) {
             return -1;
-        }
-    }
-
-    // Вспомогательный метод для чтения Long
-    private Long readLong(String prompt) {
-        System.out.print(prompt);
-        try {
-            return Long.parseLong(scanner.nextLine());
-        } catch (NumberFormatException e) {
-            return -1L;
         }
     }
 }

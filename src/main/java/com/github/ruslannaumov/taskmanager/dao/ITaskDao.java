@@ -10,4 +10,6 @@ public interface ITaskDao {
     Optional<Task> findById(Long id);
     void update(Task task);
     void deleteById(Long id);
+    List<Task> findAllWithPagination(int page, int size);
+    int count();
 }

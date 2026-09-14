@@ -111,6 +111,47 @@ public class SqliteTaskDao implements ITaskDao {
         }
     }
 
+    @Override
+    public List<Task> findAllWithPagination(int page, int size) {
+        List<Task> tasks = new ArrayList<>();
+        // Если страница 1, размер 5 -> пропускаем 0, берем 5
+        // Если страница 2, размер 5 -> пропускаем 5, берем 5
+        int offset = (page - 1) * size;
+
+        String sql = "SELECT id, title, description, status, created_at, updated_at FROM tasks LIMIT ? OFFSET ?";
+
+        try (Connection conn = DatabaseConnection.getConnection();
+             PreparedStatement pstmt = conn.prepareStatement(sql)) {
+
+            pstmt.setInt(1, size);
+            pstmt.setInt(2, offset);
+
+            try (ResultSet rs = pstmt.executeQuery()) {
+                while (rs.next()) {
+                    tasks.add(mapResultSetToTask(rs));
+                }
+            }
+        } catch (SQLException e) {
+            logger.error("Error loading tasks with pagination", e);
+        }
+        return tasks;
+    }
+
+    @Override
+    public int count() {
+        String sql = "SELECT COUNT(*) FROM tasks";
+        try (Connection conn = DatabaseConnection.getConnection();
+             Statement stmt = conn.createStatement();
+             ResultSet rs = stmt.executeQuery(sql)) {
+            if (rs.next()) {
+                return rs.getInt(1);
+            }
+        } catch (SQLException e) {
+            logger.error("Error counting tasks", e);
+        }
+        return 0;
+    }
+
     private Task mapResultSetToTask(ResultSet rs) throws SQLException {
         Task task = new Task();
         task.setId(rs.getLong("id"));
