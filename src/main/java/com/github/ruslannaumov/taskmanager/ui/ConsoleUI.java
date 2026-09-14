@@ -1,5 +1,6 @@
 package com.github.ruslannaumov.taskmanager.ui;
 
+import com.github.ruslannaumov.taskmanager.config.AppConfig;
 import com.github.ruslannaumov.taskmanager.model.Task;
 import com.github.ruslannaumov.taskmanager.model.TaskStatus;
 import com.github.ruslannaumov.taskmanager.service.ITaskService;
@@ -35,12 +36,15 @@ public class ConsoleUI {
 
             switch (choice) {
                 case 1 -> createTask();
-                case 2 -> viewTasks(); //
-                case 3 -> {
+                case 2 -> viewTasks();
+                case 3 -> clearDatabaseAndExit(); // <-- НОВЫЙ ПУНКТ
+                case 4 -> {                       // <-- EXIT сдвинут на 4
                     running = false;
                     System.out.println("Goodbye!");
                 }
-                default -> System.out.println("Invalid option.");
+                default -> {
+                    System.out.println("Invalid option.");
+                }
             }
 
             if (running) {
@@ -52,8 +56,9 @@ public class ConsoleUI {
     private void printMainMenu() {
         System.out.println("\n=== TASK MANAGER ===");
         System.out.println("1. ➕ Add Task");
-        System.out.println("2. 📋 View Tasks"); //
-        System.out.println("3. 🚪 Exit");
+        System.out.println("2. 📋 View Tasks");
+        System.out.println("3. 🧹 Clear Database & Exit");
+        System.out.println("4. 🚪 Exit");
         System.out.println("====================");
     }
 
@@ -261,6 +266,38 @@ public class ConsoleUI {
             System.out.println("Task deleted successfully!");
         } else {
             System.out.println("Deletion cancelled.");
+        }
+    }
+
+    // === ОЧИСТКА И ВЫХОД ===
+    private void clearDatabaseAndExit() {
+        clearScreen();
+        System.out.println("WARNING: DANGEROUS ACTION");
+        System.out.println("This will PERMANENTLY DELETE the entire application folder:");
+        System.out.println("   " + AppConfig.getAppDir());
+        System.out.println("All tasks, logs, and settings will be lost FOREVER.");
+        System.out.println();
+        System.out.print("Type 'DELETE' to confirm, or anything else to cancel: ");
+
+        String confirm = scanner.nextLine().trim();
+
+        if (confirm.equalsIgnoreCase("DELETE")) {
+            System.out.println("\nDeleting application data...");
+            boolean success = AppConfig.deleteAppDirectory();
+
+            if (success) {
+                System.out.println("Application data cleared successfully.");
+                System.out.println("The application will now exit.");
+            } else {
+                System.out.println("Failed to delete some files. They might be in use by another program.");
+            }
+
+            // Даем пользователю 1 секунду прочитать сообщение перед закрытием
+            try { Thread.sleep(1000); } catch (InterruptedException e) {}
+            // Принудительное завершение работы JVM
+            System.exit(0);
+        } else {
+            System.out.println("\nOperation cancelled.");
         }
     }
 

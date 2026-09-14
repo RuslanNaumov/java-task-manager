@@ -1,13 +1,13 @@
 package com.github.ruslannaumov.taskmanager.config;
 
+import ch.qos.logback.classic.LoggerContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-
+import java.util.Comparator;
 /**
  * Класс для управления конфигурацией приложения.
  * Хранит пути к файлам и папкам приложения.
@@ -67,6 +67,51 @@ public final class AppConfig {
             // Если не можем создать папки, это критическая ошибка
             logger.error("Failed to create application directories", e);
             throw new RuntimeException("Cannot initialize application directories", e);
+        }
+    }
+
+    /**
+     * Полностью удаляет директорию приложения и все её содержимое.
+     * Используется для функции "Wipe / Reset".
+     */
+    public static boolean deleteAppDirectory() {
+        try {
+            // 1. КРИТИЧЕСКИ ВАЖНО: Останавливаем логгер, чтобы он отпустил файл app.log
+            LoggerContext loggerContext = (LoggerContext) LoggerFactory.getILoggerFactory();
+            loggerContext.stop();
+
+            // 2. Небольшая пауза (100 мс), чтобы гарантировать, что ОС Windows
+            // успела освободить файловый дескриптор перед попыткой удаления.
+            Thread.sleep(100);
+
+            if (Files.exists(APP_DIR)) {
+                logger.info("Starting deletion of the ENTIRE application folder: {}", APP_DIR);
+
+                Files.walk(APP_DIR)
+                        .sorted(Comparator.reverseOrder()) // Сначала файлы, потом папки, в конце - корень
+                        .forEach(path -> {
+                            try {
+                                Files.delete(path);
+                            } catch (IOException e) {
+                                // Теперь эта ошибка маловероятна, но оставим для безопасности
+                                System.err.println("Failed to delete: " + path);
+                            }
+                        });
+
+                // Проверка: действительно ли папка исчезла
+                if (!Files.exists(APP_DIR)) {
+                    System.out.println("SUCCESS: The entire application folder has been deleted.");
+                    return true;
+                } else {
+                    System.out.println("WARNING: Folder still exists after deletion attempt.");
+                    return false;
+                }
+            }
+            return true; // Если папки и так нет, считаем это успехом
+
+        } catch (IOException | InterruptedException e) {
+            System.err.println("Failed to delete application directory: " + e.getMessage());
+            return false;
         }
     }
 
