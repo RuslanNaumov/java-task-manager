@@ -75,4 +75,9 @@ public class TaskService implements ITaskService {
         // Делим общее число задач на размер страницы и округляем вверх
         return (int) Math.ceil((double) totalTasks / size);
     }
+
+    @Override
+    public List<Task> searchTasks(String query) {
+        return taskDao.search(query);
+    }
 }

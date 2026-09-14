@@ -10,6 +10,7 @@ import java.sql.*;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.Optional;
 
 public class SqliteTaskDao implements ITaskDao {
@@ -55,6 +56,55 @@ public class SqliteTaskDao implements ITaskDao {
         }
         return tasks;
     }
+
+    public List<Task> search(String query) {
+        List<Task> tasks = new ArrayList<>();
+
+        if (query == null || query.isBlank()) {
+            return tasks;
+        }
+
+        String searchText = query.trim().toLowerCase(Locale.ROOT);
+
+        String sql = """
+            SELECT id, title, description, status, created_at, updated_at
+            FROM tasks
+            ORDER BY created_at ASC 
+            """;
+
+        try (Connection conn = DatabaseConnection.getConnection();
+             PreparedStatement pstmt = conn.prepareStatement(sql);
+             ResultSet rs = pstmt.executeQuery()) {
+
+            while (rs.next()) {
+                Task task = mapResultSetToTask(rs);
+
+                String title = task.getTitle() == null
+                        ? ""
+                        : task.getTitle().toLowerCase(Locale.ROOT);
+
+                String description = task.getDescription() == null
+                        ? ""
+                        : task.getDescription().toLowerCase(Locale.ROOT);
+
+                String status = task.getStatus() == null
+                        ? ""
+                        : task.getStatus().name().toLowerCase(Locale.ROOT);
+
+                if (title.contains(searchText)
+                        || description.contains(searchText)
+                        || status.contains(searchText)) {
+                    tasks.add(task);
+                }
+            }
+        } catch (SQLException e) {
+            logger.error("Error searching tasks", e);
+        }
+
+        return tasks;
+    }
+
+
 
     @Override
     public Optional<Task> findById(Long id) {

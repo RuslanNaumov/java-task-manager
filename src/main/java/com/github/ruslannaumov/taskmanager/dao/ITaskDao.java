@@ -12,4 +12,5 @@ public interface ITaskDao {
     void deleteById(Long id);
     List<Task> findAllWithPagination(int page, int size);
     int count();
+    List<Task> search(String query);
 }

@@ -14,4 +14,5 @@ public interface ITaskService {
     Optional<Task> getTaskById(Long id);
     List<Task> getTasksByPage(int page, int size);
     int getTotalPages(int size);
+    List<Task> searchTasks(String query);
 }
