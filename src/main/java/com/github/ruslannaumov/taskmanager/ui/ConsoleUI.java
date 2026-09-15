@@ -129,14 +129,14 @@ public class ConsoleUI {
             System.out.print("> ");
 
             String rawInput = scanner.nextLine().trim();
-            String action = parseAction(rawInput);
+            String action = parseAction(rawInput, currentPage, totalPages);
 
             switch (action) {
                 case "EXIT" -> { return "EXIT"; }
-                case "SQL" -> { return "SEARCH"; }
                 case "SEARCH" -> { return "SEARCH"; }
-                case "NEXT" -> { if (currentPage < totalPages) currentPage++; continue; }
-                case "PREV" -> { if (currentPage > 1) currentPage--; continue; }
+
+                case "NEXT" -> { currentPage++; continue; }
+                case "PREV" -> { currentPage--; continue; }
 
                 case "EDIT" -> {
                     Long id = readValidTaskIdFromDTOList(tasks, "Enter Task ID to edit (or 'M' to cancel): ");
@@ -149,7 +149,7 @@ public class ConsoleUI {
                     String idStr = editCmd.substring(5);
                     try {
                         long parsedId = Long.parseLong(idStr);
-                        if (tasks.stream().anyMatch(t -> t.id().equals(parsedId))){
+                        if (tasks.stream().anyMatch(t -> t.id().equals(parsedId))) {
                             editSpecificTask(parsedId);
                             return "REFRESH";
                         } else {
@@ -185,9 +185,8 @@ public class ConsoleUI {
                         try { Thread.sleep(1500); } catch (InterruptedException e2) {}
                     }
                 }
-
                 default -> {
-                    System.out.println("Invalid command. Use P, N, M, S, E, D or E<id>/D<id>.");
+                    System.out.println("Invalid command.");
                     try { Thread.sleep(1500); } catch (InterruptedException e) {}
                 }
             }
@@ -530,7 +529,7 @@ public class ConsoleUI {
         return input;
     }
 
-    private String parseAction(String input) {
+    private String parseAction(String input, int currentPage, int totalPages) {
         if (input == null || input.isBlank()) return "INVALID";
 
         // Проверяем формат E<число> или D<число> (например, E10 или D2)
@@ -540,14 +539,16 @@ public class ConsoleUI {
             return (action == 'E' ? "EDIT:" : "DELETE:") + id;
         }
 
-        // Стандартные одиночные команды
-        return switch (input) {
+        // Стандартные одиночные команды с проверкой контекста
+        return switch (input.toUpperCase()) {
             case "M" -> "EXIT";
             case "S" -> "SEARCH";
-            case "N" -> "NEXT";
-            case "P" -> "PREV";
             case "E" -> "EDIT";
             case "D" -> "DELETE";
+
+            case "N" -> (currentPage < totalPages) ? "NEXT" : "INVALID";
+            case "P" -> (currentPage > 1) ? "PREV" : "INVALID";
+
             default -> "INVALID";
         };
     }
