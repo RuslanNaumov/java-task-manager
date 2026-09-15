@@ -54,6 +54,13 @@
             <version>2.4.1</version>
         </dependency>
 
+        <!-- JLine 3 для продвинутого ввода с предзаполнением -->
+        <dependency>
+            <groupId>org.jline</groupId>
+            <artifactId>jline</artifactId>
+            <version>3.25.1</version>
+        </dependency>
+
         <!-- JUnit 5-->
         <dependency>
             <groupId>org.junit.jupiter</groupId>
