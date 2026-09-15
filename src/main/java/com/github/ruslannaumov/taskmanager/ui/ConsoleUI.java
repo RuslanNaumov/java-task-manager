@@ -1,15 +1,15 @@
 package com.github.ruslannaumov.taskmanager.ui;
 
 import com.github.ruslannaumov.taskmanager.config.AppConfig;
+import com.github.ruslannaumov.taskmanager.dto.TaskRequestDTO;
+import com.github.ruslannaumov.taskmanager.dto.TaskResponseDTO;
 import com.github.ruslannaumov.taskmanager.exception.ValidationException;
-import com.github.ruslannaumov.taskmanager.model.Task;
 import com.github.ruslannaumov.taskmanager.model.TaskStatus;
 import com.github.ruslannaumov.taskmanager.service.ITaskService;
 import com.github.ruslannaumov.taskmanager.util.ValidationUtils;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Optional;
 import java.util.Scanner;
 
 public class ConsoleUI {
@@ -62,12 +62,11 @@ public class ConsoleUI {
         System.out.println("====================");
     }
 
-    // === ГЛАВНЫЙ ЦИКЛ УПРАВЛЕНИЯ ЗАДАЧАМИ ===
     private void viewTasks() {
         String currentQuery = null;
 
         while (true) {
-            List<Task> tasks;
+            List<TaskResponseDTO> tasks;
             if (currentQuery == null) {
                 tasks = taskService.getAllTasks();
             } else {
@@ -75,7 +74,7 @@ public class ConsoleUI {
                 if (tasks.isEmpty()) {
                     clearScreen();
                     System.out.printf("No tasks found for query: \"%s\"%n", currentQuery);
-                    // 2. ВАЛИДАЦИЯ ПОИСКА: Не менее 1 символа
+                    // ВАЛИДАЦИЯ ПОИСКА: Не менее 1 символа
                     String newQuery = readValidSearchQuery();
                     if (newQuery == null) {
                         clearScreen();
@@ -103,7 +102,7 @@ public class ConsoleUI {
         }
     }
 
-    private String displayTaskListAndHandleActions(List<Task> tasks, boolean isSearchMode) {
+    private String displayTaskListAndHandleActions(List<TaskResponseDTO> tasks, boolean isSearchMode) {
         int currentPage = 1;
         int totalPages = Math.max(1, (int) Math.ceil((double) tasks.size() / PAGE_SIZE));
 
@@ -114,13 +113,13 @@ public class ConsoleUI {
 
             int fromIndex = (currentPage - 1) * PAGE_SIZE;
             int toIndex = Math.min(fromIndex + PAGE_SIZE, tasks.size());
-            List<Task> pageTasks = tasks.subList(fromIndex, toIndex);
+            List<TaskResponseDTO> pageTasks = tasks.subList(fromIndex, toIndex);
 
             printTableHeader();
             if (pageTasks.isEmpty()) {
                 System.out.println("No tasks found.");
             } else {
-                for (Task task : pageTasks) {
+                for (TaskResponseDTO task : pageTasks) {
                     printTaskRow(task);
                 }
             }
@@ -140,7 +139,7 @@ public class ConsoleUI {
                 case "PREV" -> { if (currentPage > 1) currentPage--; continue; }
 
                 case "EDIT" -> {
-                    Long id = readValidTaskId(tasks, "Enter Task ID to edit (or 'M' to cancel): ");
+                    Long id = readValidTaskIdFromDTOList(tasks, "Enter Task ID to edit (or 'M' to cancel): ");
                     if (id != null) {
                         editSpecificTask(id);
                         return "REFRESH";
@@ -150,7 +149,7 @@ public class ConsoleUI {
                     String idStr = editCmd.substring(5);
                     try {
                         long parsedId = Long.parseLong(idStr);
-                        if (tasks.stream().anyMatch(t -> t.getId().equals(parsedId))) {
+                        if (tasks.stream().anyMatch(t -> t.id().equals(parsedId))){
                             editSpecificTask(parsedId);
                             return "REFRESH";
                         } else {
@@ -164,7 +163,7 @@ public class ConsoleUI {
                 }
 
                 case "DELETE" -> {
-                    Long id = readValidTaskId(tasks, "Enter Task ID to delete (or 'M' to cancel): ");
+                    Long id = readValidTaskIdFromDTOList(tasks, "Enter Task ID to delete (or 'M' to cancel): ");
                     if (id != null) {
                         deleteSpecificTask(id);
                         return "REFRESH";
@@ -174,7 +173,7 @@ public class ConsoleUI {
                     String idStr = delCmd.substring(7);
                     try {
                         long parsedId = Long.parseLong(idStr);
-                        if (tasks.stream().anyMatch(t -> t.getId().equals(parsedId))) {
+                        if (tasks.stream().anyMatch(t -> t.id().equals(parsedId))) {
                             deleteSpecificTask(parsedId);
                             return "REFRESH";
                         } else {
@@ -210,7 +209,9 @@ public class ConsoleUI {
         if (description == null) return;
 
         try {
-            taskService.createTask(title, description);
+            // Создаем DTO и передаем его в сервис
+            TaskRequestDTO requestDTO = TaskRequestDTO.forCreation(title, description);
+            taskService.createTask(requestDTO);
             System.out.println("\nTask created successfully!");
         } catch (ValidationException e) {
             System.out.println("\nОшибка: " + e.getMessage());
@@ -218,35 +219,41 @@ public class ConsoleUI {
     }
 
     private void editSpecificTask(Long id) {
-        Optional<Task> optionalTask = taskService.getTaskById(id);
-        if (optionalTask.isEmpty()) {
+        TaskResponseDTO taskDTO = taskService.getTaskById(id).orElse(null);
+        if (taskDTO == null) {
             System.out.println("\nЗадача не найдена.");
             return;
         }
-
-        Task task = optionalTask.get();
 
         while (true) {
             clearScreen();
             System.out.println("--- EDIT TASK #" + id + " ---");
             System.out.println("Type 'M' at any prompt to cancel and return to Menu");
-            System.out.println("Current Title: " + task.getTitle());
-            System.out.println("Current Desc : " + task.getDescription());
-            System.out.println("Current Stat : " + task.getStatus());
+            System.out.println("Current Title: " + taskDTO.title());
+            System.out.println("Current Desc : " + taskDTO.description());
+            System.out.println("Current Stat : " + taskDTO.status());
             System.out.println("----------------------------------------");
 
-            String title = readValidatedTitleWithSkip("New Title (or Enter to skip): ", task.getTitle());
+            String title = readValidatedTitleWithSkip("New Title (or Enter to skip): ", taskDTO.title());
             if (title == null) return;
 
-            String description = readValidatedDescriptionWithSkip("New Description (or Enter to skip): ", task.getDescription());
+            String description = readValidatedDescriptionWithSkip("New Description (or Enter to skip): ", taskDTO.description());
             if (description == null) return;
 
             System.out.println("Available statuses: PENDING, ACTIVE, DONE, CANCEL.");
-            TaskStatus status = readValidatedStatusWithSkip("New Status ([P] | [A] | [D] | [C] or full name, or Enter to skip): ", task.getStatus());
+            TaskStatus status = readValidatedStatusWithSkip("New Status ([P] | [A] | [D] | [C] or full name, or Enter to skip): ", taskDTO.status());
             if (status == null) return;
 
             try {
-                taskService.updateTask(id, title, description, status);
+                // Собираем DTO для обновления. Если пользователь нажал Enter, передаем null,
+                // и сервис проигнорирует это поле (оставит старое значение).
+                TaskRequestDTO updateDTO = TaskRequestDTO.forUpdate(
+                        title.isBlank() ? null : title,
+                        description.isBlank() ? null : description,
+                        status
+                );
+
+                taskService.updateTask(id, updateDTO);
                 System.out.println("\nTask updated successfully!");
                 break;
             } catch (ValidationException e) {
@@ -350,19 +357,19 @@ public class ConsoleUI {
         }
     }
 
-    private Long readValidTaskId(List<Task> validTasks, String prompt) {
+    private Long readValidTaskIdFromDTOList(List<TaskResponseDTO> validTasks, String prompt) {
         while (true) {
             System.out.print(prompt);
             String input = scanner.nextLine().trim();
 
-            if (input.equalsIgnoreCase("M")) return null; // Возможность отмены
+            if (input.equalsIgnoreCase("M")) return null;
 
             try {
                 long id = Long.parseLong(input);
-                boolean exists = validTasks.stream().anyMatch(t -> t.getId().equals(id));
+                boolean exists = validTasks.stream().anyMatch(t -> t.id().equals(id));
 
                 if (exists) {
-                    return id; // Успех: это число и оно есть в списке
+                    return id;
                 } else {
                     System.out.println("Task with ID " + id + " not found in the current list. Try again.");
                 }
@@ -421,18 +428,18 @@ public class ConsoleUI {
         System.out.println("=".repeat(totalWidth));
     }
 
-    private void printTaskRow(Task task) {
-        List<String> titleLines = wrapText(task.getTitle(), COL_TITLE);
-        List<String> descLines = wrapText(task.getDescription(), COL_DESC);
+    private void printTaskRow(TaskResponseDTO task) {
+        List<String> titleLines = wrapText(task.title(), COL_TITLE); // Используем task.title() вместо getTitle()
+        List<String> descLines = wrapText(task.description(), COL_DESC);
 
         int linesCount = Math.max(titleLines.size(), descLines.size());
         if (linesCount == 0) linesCount = 1;
 
         for (int i = 0; i < linesCount; i++) {
-            String idStr = (i == 0) ? String.format("%" + COL_ID + "d", task.getId()) : " ".repeat(COL_ID);
+            String idStr = (i == 0) ? String.format("%" + COL_ID + "d", task.id()) : " ".repeat(COL_ID);
             String titleStr = (i < titleLines.size()) ? String.format("%-" + COL_TITLE + "s", titleLines.get(i)) : " ".repeat(COL_TITLE);
             String descStr = (i < descLines.size()) ? String.format("%-" + COL_DESC + "s", descLines.get(i)) : " ".repeat(COL_DESC);
-            String statusStr = (i == 0) ? task.getStatus().toString() : "";
+            String statusStr = (i == 0) ? task.status().toString() : "";
 
             System.out.printf("%s | %s | %s | %s%n", idStr, titleStr, descStr, statusStr);
         }

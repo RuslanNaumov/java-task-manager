@@ -1,15 +1,17 @@
 package com.github.ruslannaumov.taskmanager.service;
 
 import com.github.ruslannaumov.taskmanager.dao.ITaskDao;
+import com.github.ruslannaumov.taskmanager.dto.TaskRequestDTO;
+import com.github.ruslannaumov.taskmanager.dto.TaskResponseDTO;
 import com.github.ruslannaumov.taskmanager.exception.ValidationException;
 import com.github.ruslannaumov.taskmanager.model.Task;
-import com.github.ruslannaumov.taskmanager.model.TaskStatus;
 import com.github.ruslannaumov.taskmanager.util.ValidationUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.stream.Collectors;
 
 public class TaskService implements ITaskService {
 
@@ -21,47 +23,54 @@ public class TaskService implements ITaskService {
     }
 
     @Override
-    public Task createTask(String title, String description) {
-        ValidationUtils.validateTitle(title);
-        ValidationUtils.validateDescription(description);
+    public TaskResponseDTO createTask(TaskRequestDTO requestDTO) {
+        ValidationUtils.validateTitle(requestDTO.title());
+        ValidationUtils.validateDescription(requestDTO.description());
 
-        Task task = new Task(title, description);
+        Task task = new Task(requestDTO.title(), requestDTO.description());
         taskDao.save(task);
-        logger.info("Сервис создал задачу: {}", title);
-        return task;
+
+        logger.info("Сервис создал задачу: {}", task.getTitle());
+        return TaskResponseDTO.from(task);
     }
 
     @Override
-    public List<Task> getAllTasks() {
-        return taskDao.findAll();
+    public List<TaskResponseDTO> getAllTasks() {
+        return taskDao.findAll().stream()
+                .map(TaskResponseDTO::from)
+                .collect(Collectors.toList());
     }
 
     @Override
-    public Optional<Task> getTaskById(Long id) {
-        return taskDao.findById(id);
+    public Optional<TaskResponseDTO> getTaskById(Long id) {
+        return taskDao.findById(id).map(TaskResponseDTO::from);
     }
 
     @Override
-    public void updateTask(Long id, String title, String description, TaskStatus status) {
-        // 1. Валидируем входящие данные
-        ValidationUtils.validateTitle(title);
-        ValidationUtils.validateDescription(description);
-        ValidationUtils.validateStatus(status);
+    public TaskResponseDTO updateTask(Long id, TaskRequestDTO requestDTO) {
+        Task task = taskDao.findById(id)
+                .orElseThrow(() -> new ValidationException("Задача с ID " + id + " не найдена."));
 
-        // 2. Ищем задачу
-        Optional<Task> taskOptional = taskDao.findById(id);
-        if (taskOptional.isEmpty()) {
-            throw new ValidationException("Задача с ID " + id + " не найдена.");
+        // Применяем изменения только если новые данные не пустые
+        if (requestDTO.title() != null && !requestDTO.title().isBlank()) {
+            ValidationUtils.validateTitle(requestDTO.title());
+            task.setTitle(requestDTO.title());
         }
 
-        // 3. Обновляем и сохраняем
-        Task task = taskOptional.get();
-        task.setTitle(title);
-        task.setDescription(description);
-        task.setStatus(status);
+        if (requestDTO.description() != null && !requestDTO.description().isBlank()) {
+            ValidationUtils.validateDescription(requestDTO.description());
+            task.setDescription(requestDTO.description());
+        }
+
+        if (requestDTO.status() != null) {
+            ValidationUtils.validateStatus(requestDTO.status());
+            task.setStatus(requestDTO.status());
+        }
 
         taskDao.update(task);
         logger.info("Сервис обновил задачу ID: {}", id);
+
+        return TaskResponseDTO.from(task);
     }
 
     @Override
@@ -70,8 +79,10 @@ public class TaskService implements ITaskService {
     }
 
     @Override
-    public List<Task> getTasksByPage(int page, int size) {
-        return taskDao.findAllWithPagination(page, size);
+    public List<TaskResponseDTO> getTasksByPage(int page, int size) {
+        return taskDao.findAllWithPagination(page, size).stream()
+                .map(TaskResponseDTO::from)
+                .collect(Collectors.toList());
     }
 
     @Override
@@ -82,7 +93,9 @@ public class TaskService implements ITaskService {
     }
 
     @Override
-    public List<Task> searchTasks(String query) {
-        return taskDao.search(query);
+    public List<TaskResponseDTO> searchTasks(String query) {
+        return taskDao.search(query).stream()
+                .map(TaskResponseDTO::from)
+                .collect(Collectors.toList());
     }
 }

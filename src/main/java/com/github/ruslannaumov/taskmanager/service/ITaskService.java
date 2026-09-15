@@ -1,18 +1,18 @@
 package com.github.ruslannaumov.taskmanager.service;
 
-import com.github.ruslannaumov.taskmanager.model.Task;
-import com.github.ruslannaumov.taskmanager.model.TaskStatus;
+import com.github.ruslannaumov.taskmanager.dto.TaskRequestDTO;
+import com.github.ruslannaumov.taskmanager.dto.TaskResponseDTO;
 
 import java.util.List;
 import java.util.Optional;
 
 public interface ITaskService {
-    Task createTask(String title, String description);
-    List<Task> getAllTasks();
-    void updateTask(Long id, String title, String description, TaskStatus status);
+    TaskResponseDTO createTask(TaskRequestDTO requestDTO);
+    List<TaskResponseDTO> getAllTasks();
+    Optional<TaskResponseDTO> getTaskById(Long id);
+    TaskResponseDTO updateTask(Long id, TaskRequestDTO requestDTO);
     void deleteTask(Long id);
-    Optional<Task> getTaskById(Long id);
-    List<Task> getTasksByPage(int page, int size);
+    List<TaskResponseDTO> getTasksByPage(int page, int size);
     int getTotalPages(int size);
-    List<Task> searchTasks(String query);
+    List<TaskResponseDTO> searchTasks(String query);
 }
