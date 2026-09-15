@@ -162,7 +162,7 @@ public class ConsoleUI {
         }
     }
 
-    // === ДЕЙСТВИЯ С МГНОВЕННОЙ ВАЛИДАЦИЕЙ ===
+    // === ДЕЙСТВИЯ С ВАЛИДАЦИЕЙ ===
 
     private void createTask() {
         clearScreen();
@@ -179,10 +179,8 @@ public class ConsoleUI {
         try {
             taskService.createTask(title, description);
             System.out.println("\nTask created successfully!");
-            pause();
         } catch (ValidationException e) {
             System.out.println("\nОшибка: " + e.getMessage());
-            pause();
         }
     }
 
@@ -190,7 +188,6 @@ public class ConsoleUI {
         Optional<Task> optionalTask = taskService.getTaskById(id);
         if (optionalTask.isEmpty()) {
             System.out.println("\nЗадача не найдена.");
-            pause();
             return;
         }
 
@@ -218,16 +215,14 @@ public class ConsoleUI {
             try {
                 taskService.updateTask(id, title, description, status);
                 System.out.println("\nTask updated successfully!");
-                pause();
                 break;
             } catch (ValidationException e) {
                 System.out.println("\nОшибка: " + e.getMessage());
-                pause();
             }
         }
     }
 
-    // === ХЕЛПЕРЫ МГНОВЕННОЙ ВАЛИДАЦИИ (ДАННЫЕ) ===
+    // === ХЕЛПЕРЫ ВАЛИДАЦИИ ===
 
     private String readValidatedTitle() {
         while (true) {
@@ -364,7 +359,6 @@ public class ConsoleUI {
         } else {
             System.out.println("Deletion cancelled.");
         }
-        pause();
     }
 
     private void clearDatabaseAndExit() {
@@ -392,7 +386,6 @@ public class ConsoleUI {
             System.exit(0);
         } else {
             System.out.println("\nOperation cancelled.");
-            pause();
         }
     }
 
@@ -462,13 +455,12 @@ public class ConsoleUI {
     }
 
     private void clearScreen() {
-        System.out.print("\033[H\033[2J");
+        // \033[H : Курсор в верхний левый угол
+        // \033[2J : Очистить видимый экран
+        // \033[3J : Очистить буфер прокрутки (историю)!
+        System.out.print("\033[H\033[2J\033[3J");
         System.out.flush();
-    }
 
-    private void pause() {
-        System.out.println("\nPress Enter to continue...");
-        scanner.nextLine();
     }
 
     private String readInputWithEscape(String prompt) {
