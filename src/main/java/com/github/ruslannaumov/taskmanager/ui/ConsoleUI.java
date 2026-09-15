@@ -126,7 +126,7 @@ public class ConsoleUI {
             }
             System.out.printf("Page %d of %d%n", currentPage, totalPages);
             System.out.println("[N]ext | [P]rev | [M]enu | [S]earch");
-            System.out.println("OR type [E] to Edit | [D] to Delete");
+            System.out.println("OR type [E]<id> to Edit | [D]<id> to Delete (e.g., E10, D2)");
             System.out.print("> ");
 
             String rawInput = scanner.nextLine().trim();
@@ -134,17 +134,35 @@ public class ConsoleUI {
 
             switch (action) {
                 case "EXIT" -> { return "EXIT"; }
+                case "SQL" -> { return "SEARCH"; }
                 case "SEARCH" -> { return "SEARCH"; }
                 case "NEXT" -> { if (currentPage < totalPages) currentPage++; continue; }
                 case "PREV" -> { if (currentPage > 1) currentPage--; continue; }
+
                 case "EDIT" -> {
-                    // 3. ВАЛИДАЦИЯ ID: Только цифры и только существующие в списке
                     Long id = readValidTaskId(tasks, "Enter Task ID to edit (or 'M' to cancel): ");
                     if (id != null) {
                         editSpecificTask(id);
                         return "REFRESH";
                     }
                 }
+                case String editCmd when editCmd.startsWith("EDIT:") -> {
+                    String idStr = editCmd.substring(5);
+                    try {
+                        long parsedId = Long.parseLong(idStr);
+                        if (tasks.stream().anyMatch(t -> t.getId().equals(parsedId))) {
+                            editSpecificTask(parsedId);
+                            return "REFRESH";
+                        } else {
+                            System.out.println("Task with ID " + parsedId + " not found in the current list.");
+                            try { Thread.sleep(1500); } catch (InterruptedException e) {}
+                        }
+                    } catch (NumberFormatException e) {
+                        System.out.println("Invalid ID format.");
+                        try { Thread.sleep(1500); } catch (InterruptedException e2) {}
+                    }
+                }
+
                 case "DELETE" -> {
                     Long id = readValidTaskId(tasks, "Enter Task ID to delete (or 'M' to cancel): ");
                     if (id != null) {
@@ -152,11 +170,26 @@ public class ConsoleUI {
                         return "REFRESH";
                     }
                 }
-                default -> {
-                    System.out.println("Invalid command. Use uppercase single letter (P, N, M, S, E, D).");
+                case String delCmd when delCmd.startsWith("DELETE:") -> {
+                    String idStr = delCmd.substring(7);
                     try {
-                        Thread.sleep(1500);
-                    } catch (InterruptedException e) {}
+                        long parsedId = Long.parseLong(idStr);
+                        if (tasks.stream().anyMatch(t -> t.getId().equals(parsedId))) {
+                            deleteSpecificTask(parsedId);
+                            return "REFRESH";
+                        } else {
+                            System.out.println("Task with ID " + parsedId + " not found in the current list.");
+                            try { Thread.sleep(1500); } catch (InterruptedException e) {}
+                        }
+                    } catch (NumberFormatException e) {
+                        System.out.println("Invalid ID format.");
+                        try { Thread.sleep(1500); } catch (InterruptedException e2) {}
+                    }
+                }
+
+                default -> {
+                    System.out.println("Invalid command. Use P, N, M, S, E, D or E<id>/D<id>.");
+                    try { Thread.sleep(1500); } catch (InterruptedException e) {}
                 }
             }
         }
@@ -293,11 +326,6 @@ public class ConsoleUI {
         }
     }
 
-    // === ХЕЛПЕРЫ ВАЛИДАЦИИ ВВОДА ПОЛЬЗОВАТЕЛЯ (UI) ===
-
-    /**
-     * 1. Валидация главного меню: принимает только "1", "2", "3" или "4".
-     */
     private int readValidMenuOption() {
         while (true) {
             System.out.print("Select option (1-4): ");
@@ -309,9 +337,6 @@ public class ConsoleUI {
         }
     }
 
-    /**
-     * 2. Валидация поиска: минимум 1 символ, не пустая строка.
-     */
     private String readValidSearchQuery() {
         while (true) {
             System.out.print("Enter search query (or 'M' for Main Menu): ");
@@ -325,9 +350,6 @@ public class ConsoleUI {
         }
     }
 
-    /**
-     * 3. Валидация ID задачи: только цифры И этот ID должен существовать в переданном списке.
-     */
     private Long readValidTaskId(List<Task> validTasks, String prompt) {
         while (true) {
             System.out.print(prompt);
@@ -474,6 +496,15 @@ public class ConsoleUI {
 
     private String parseAction(String input) {
         if (input == null || input.isBlank()) return "INVALID";
+
+        // Проверяем формат E<число> или D<число> (например, E10 или D2)
+        if (input.matches("^[ED]\\d+$")) {
+            char action = input.charAt(0);
+            String id = input.substring(1);
+            return (action == 'E' ? "EDIT:" : "DELETE:") + id;
+        }
+
+        // Стандартные одиночные команды
         return switch (input) {
             case "M" -> "EXIT";
             case "S" -> "SEARCH";
