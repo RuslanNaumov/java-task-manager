@@ -7,25 +7,25 @@ public class ValidationUtils {
 
     public static void validateTitle(String title) {
         if (title == null || title.trim().length() < 2) {
-            throw new ValidationException("Заголовок должен содержать минимум 2 символа.");
+            throw new ValidationException("Title must contain at least 2 characters.");
         }
         if (title.trim().length() > 50) {
-            throw new ValidationException("Заголовок не может быть длиннее 50 символов.");
+            throw new ValidationException("Title cannot be longer than 50 characters.");
         }
     }
 
     public static void validateDescription(String description) {
         if (description == null || description.trim().length() < 2) {
-            throw new ValidationException("Description должен содержать минимум 2 символа.");
+            throw new ValidationException("Description must contain at least 2 characters.");
         }
         if (description.length() > 100) {
-            throw new ValidationException("Description не может быть длиннее 100 символов.");
+            throw new ValidationException("Description cannot be longer than 100 characters.");
         }
     }
 
     public static void validateStatus(TaskStatus status) {
         if (status == null) {
-            throw new ValidationException("Статус задачи обязателен.");
+            throw new ValidationException("Status required");
         }
     }
 }
