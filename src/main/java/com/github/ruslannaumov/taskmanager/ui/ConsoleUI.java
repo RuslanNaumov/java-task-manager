@@ -123,9 +123,9 @@ public class ConsoleUI {
                     printTaskRow(task);
                 }
             }
+
             System.out.printf("Page %d of %d%n", currentPage, totalPages);
-            System.out.println("[N]ext | [P]rev | [M]enu | [S]earch");
-            System.out.println("OR type [E]<id> to Edit | [D]<id> to Delete (e.g., E10, D2)");
+            printPaginationControls(currentPage, totalPages);
             System.out.print("> ");
 
             String rawInput = scanner.nextLine().trim();
@@ -444,6 +444,35 @@ public class ConsoleUI {
             System.out.printf("%s | %s | %s | %s%n", idStr, titleStr, descStr, statusStr);
         }
         System.out.println("-".repeat(COL_ID + COL_TITLE + COL_DESC + COL_STATUS + 10));
+    }
+
+    private void printPaginationControls(int currentPage, int totalPages) {
+        // Если страница всего одна (или задач нет), пагинация не нужна
+        if (totalPages <= 1) {
+            System.out.println("[M]enu | [S]earch");
+        } else {
+            List<String> controls = new ArrayList<>();
+
+            // Показываем [P]rev только если мы не на первой странице
+            if (currentPage > 1) {
+                controls.add("[P]rev");
+            }
+
+            // Показываем [N]ext только если мы не на последней странице
+            if (currentPage < totalPages) {
+                controls.add("[N]ext");
+            }
+
+            // Базовые команды есть всегда
+            controls.add("[M]enu");
+            controls.add("[S]earch");
+
+            // Собираем в строку через разделитель
+            System.out.println(String.join(" | ", controls));
+        }
+
+        // Подсказка по быстрым командам (выводится всегда)
+        System.out.println("OR type [E]<id> to Edit | [D]<id> to Delete (e.g., E10, D2)");
     }
 
     private List<String> wrapText(String text, int width) {
