@@ -85,7 +85,7 @@ public class ConsoleUI {
                 }
             }
 
-            String action = displayTaskListAndHandleActions(tasks, currentQuery != null);
+            String action = displayTaskListAndHandleActions(tasks, currentQuery );
 
             if (action.equals("EXIT")) {
                 clearScreen();
@@ -102,7 +102,7 @@ public class ConsoleUI {
         }
     }
 
-    private String displayTaskListAndHandleActions(List<TaskResponseDTO> tasks, boolean isSearchMode) {
+    private String displayTaskListAndHandleActions(List<TaskResponseDTO> tasks, String currentQuery) {
         int currentPage = 1;
         int totalPages = Math.max(1, (int) Math.ceil((double) tasks.size() / PAGE_SIZE));
 
@@ -124,7 +124,11 @@ public class ConsoleUI {
                 }
             }
 
-            System.out.printf("Page %d of %d%n", currentPage, totalPages);
+            if (currentQuery != null) {
+                System.out.printf("Page %d of %d (for the search query \"%s\")%n", currentPage, totalPages, currentQuery);
+            } else {
+                System.out.printf("Page %d of %d (all tasks)%n", currentPage, totalPages);
+            }
             printPaginationControls(currentPage, totalPages);
             System.out.print("> ");
 
@@ -154,11 +158,11 @@ public class ConsoleUI {
                             return "REFRESH";
                         } else {
                             System.out.println("Task with ID " + parsedId + " not found in the current list.");
-                            try { Thread.sleep(1500); } catch (InterruptedException e) {}
+                            try { Thread.sleep(600); } catch (InterruptedException e) {}
                         }
                     } catch (NumberFormatException e) {
                         System.out.println("Invalid ID format.");
-                        try { Thread.sleep(1500); } catch (InterruptedException e2) {}
+                        try { Thread.sleep(600); } catch (InterruptedException e2) {}
                     }
                 }
 
@@ -178,16 +182,16 @@ public class ConsoleUI {
                             return "REFRESH";
                         } else {
                             System.out.println("Task with ID " + parsedId + " not found in the current list.");
-                            try { Thread.sleep(1500); } catch (InterruptedException e) {}
+                            try { Thread.sleep(600); } catch (InterruptedException e) {}
                         }
                     } catch (NumberFormatException e) {
                         System.out.println("Invalid ID format.");
-                        try { Thread.sleep(1500); } catch (InterruptedException e2) {}
+                        try { Thread.sleep(600); } catch (InterruptedException e2) {}
                     }
                 }
                 default -> {
                     System.out.println("Invalid command.");
-                    try { Thread.sleep(1500); } catch (InterruptedException e) {}
+                    try { Thread.sleep(600); } catch (InterruptedException e) {}
                 }
             }
         }
