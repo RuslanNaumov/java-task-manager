@@ -435,7 +435,19 @@ public class ConsoleUI {
     }
 
     private void deleteSpecificTask(Long id) {
-        String confirm = JLineInputHelper.readLine("\nAre you sure you want to delete task #" + id + "? (y/n): ").trim();
+        // 1. ПРОВЕРКА СУЩЕСТВОВАНИЯ ЗАДАЧИ
+        var taskDTO = taskService.getTaskById(id).orElse(null);
+        if (taskDTO == null) {
+            System.out.println("\nTask with ID " + id + " not found.");
+            pause();
+            return;
+        }
+
+        // 2. ПОДТВЕРЖДЕНИЕ УДАЛЕНИЯ
+        String confirm = JLineInputHelper.readLine(
+                "\nAre you sure you want to delete task #" + id + " (\"" + taskDTO.title() + "\")? (y/n): "
+        ).trim();
+
         if (confirm.equalsIgnoreCase("y")) {
             taskService.deleteTask(id);
             System.out.println("Task deleted successfully!");
