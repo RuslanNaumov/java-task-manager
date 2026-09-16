@@ -256,6 +256,7 @@ public class ConsoleUI {
     }
 
     private void editSpecificTask(Long id) {
+        clearScreen();
         TaskResponseDTO taskDTO = taskService.getTaskById(id).orElse(null);
         if (taskDTO == null) {
             System.out.println("\nTask not found.");
@@ -264,8 +265,9 @@ public class ConsoleUI {
         }
 
         System.out.println("=== EDIT TASK #" + id + " ===");
-        System.out.println("Press Enter to keep current value. Type 'M' to cancel.");
+        printTaskDetails(taskDTO);
         System.out.println("-----------------------------------------------------------");
+        System.out.println("Press Enter to keep current value. Type 'M' to cancel.");
 
         // 1. ПОЭТАПНАЯ ВАЛИДАЦИЯ: TITLE
         String finalTitle = taskDTO.title();
@@ -358,6 +360,36 @@ public class ConsoleUI {
         }
     }
 
+    private void deleteSpecificTask(Long id) {
+        clearScreen();
+        // 1. ПРОВЕРКА СУЩЕСТВОВАНИЯ ЗАДАЧИ
+        var taskDTO = taskService.getTaskById(id).orElse(null);
+        if (taskDTO == null) {
+            System.out.println("\nTask with ID " + id + " not found.");
+            pause();
+            return;
+        }
+
+        System.out.println("=== DELETE TASK #" + id + " ===");
+        printTaskDetails(taskDTO);
+        System.out.println("-----------------------------------------------------------");
+        System.out.println("Confirmation is required, or press 'M' to cancel.");
+
+        // 2. ПОДТВЕРЖДЕНИЕ УДАЛЕНИЯ
+        String confirm = JLineInputHelper.readLine(
+                "\nAre you sure you want to delete task #" + id + " (\"" + taskDTO.title() + "\")? (y/n): "
+        ).trim();
+
+        if (confirm.equalsIgnoreCase("y")) {
+            taskService.deleteTask(id);
+            System.out.println("Task deleted successfully!");
+            pause();
+        } else {
+            System.out.println("Deletion cancelled.");
+            pause();
+        }
+    }
+
     // === ХЕЛПЕРЫ ВАЛИДАЦИИ ===
 
     private String readValidatedTitle() {
@@ -434,30 +466,6 @@ public class ConsoleUI {
         }
     }
 
-    private void deleteSpecificTask(Long id) {
-        // 1. ПРОВЕРКА СУЩЕСТВОВАНИЯ ЗАДАЧИ
-        var taskDTO = taskService.getTaskById(id).orElse(null);
-        if (taskDTO == null) {
-            System.out.println("\nTask with ID " + id + " not found.");
-            pause();
-            return;
-        }
-
-        // 2. ПОДТВЕРЖДЕНИЕ УДАЛЕНИЯ
-        String confirm = JLineInputHelper.readLine(
-                "\nAre you sure you want to delete task #" + id + " (\"" + taskDTO.title() + "\")? (y/n): "
-        ).trim();
-
-        if (confirm.equalsIgnoreCase("y")) {
-            taskService.deleteTask(id);
-            System.out.println("Task deleted successfully!");
-            pause();
-        } else {
-            System.out.println("Deletion cancelled.");
-            pause();
-        }
-    }
-
     private void clearDatabaseAndExit() {
         clearScreen();
         System.out.println("WARNING: DANGEROUS ACTION");
@@ -526,6 +534,15 @@ public class ConsoleUI {
             System.out.println(String.join(" | ", controls));
         }
         System.out.println("OR type [E]<id> to Edit | [D]<id> to Delete (e.g., E10, D2)");
+    }
+
+    private void printTaskDetails(TaskResponseDTO task) {
+        System.out.printf("ID: %d%n", task.id());
+        System.out.printf("Title: %s%n", task.title());
+        System.out.printf("Description: %s%n", task.description() != null ? task.description() : "(empty)");
+        System.out.printf("Status: %s%n", task.status());
+        System.out.printf("Created: %s%n", task.createdAt() != null ? task.createdAt().toString() : "N/A");
+        System.out.printf("Updated: %s%n", task.updatedAt() != null ? task.updatedAt().toString() : "N/A");
     }
 
     private List<String> wrapText(String text, int width) {
