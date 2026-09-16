@@ -187,139 +187,48 @@ public class ConsoleUI {
     }
 
     private void createTask() {
-        String finalTitle = "";
-        String finalDesc = "";
-        TaskStatus finalStatus = TaskStatus.PENDING;
-
-        // 1. ВВОД TITLE с показом контекста
-        while (true) {
-            clearScreen();
-            System.out.println("--- CREATE TASK ---");
-            System.out.println("Type 'M' at any prompt to return to Main Menu");
-            System.out.println("-------------------------------------------------");
-
-            // Если уже вводили description или status, показываем их
-            if (!finalDesc.isEmpty()) {
-                System.out.println("✓ Description: " + finalDesc);
-            }
-            if (finalStatus != TaskStatus.PENDING) {
-                System.out.println("✓ Status: " + finalStatus);
-            }
-
-            String input = JLineInputHelper.readLineWithDefault("Title: ", finalTitle).trim();
-
-            if (input.equalsIgnoreCase("M")) {
-                System.out.println("Task creation cancelled.");
-                pause();
-                return;
-            }
-
-            if (input.isBlank()) {
-                System.out.println("Title cannot be empty.");
-                pause();
-                continue;
-            }
-
-            try {
-                ValidationUtils.validateTitle(input);
-                finalTitle = input;
-                break; // Переходим к description
-            } catch (ValidationException e) {
-                System.out.println(e.getMessage());
-                pause();
-            }
-        }
-
-        // 2. ВВОД DESCRIPTION с показом контекста
-        while (true) {
-            clearScreen();
-            System.out.println("--- CREATE TASK ---");
-            System.out.println("Type 'M' at any prompt to return to Main Menu");
-            System.out.println("-------------------------------------------------");
-            System.out.println("Title: " + finalTitle);
-
-            if (finalStatus != TaskStatus.PENDING) {
-                System.out.println("✓ Status: " + finalStatus);
-            }
-
-            String input = JLineInputHelper.readLineWithDefault("Description: ", finalDesc).trim();
-
-            if (input.equalsIgnoreCase("M")) {
-                System.out.println("Task creation cancelled.");
-                pause();
-                return;
-            }
-
-            if (input.isBlank()) {
-                System.out.println("Description cannot be empty.");
-                pause();
-                continue;
-            }
-
-            try {
-                ValidationUtils.validateDescription(input);
-                finalDesc = input;
-                break;
-            } catch (ValidationException e) {
-                System.out.println(e.getMessage());
-                pause();
-            }
-        }
-
-        // 3. ВЫБОР STATUS с показом контекста
-        String currentStatusInput = "PENDING";
-
-        while (true) {
-            clearScreen();
-            System.out.println("--- CREATE TASK ---");
-            System.out.println("Type 'M' at any prompt to return to Main Menu");
-            System.out.println("-------------------------------------------------");
-            System.out.println("Title: " + finalTitle);
-            System.out.println("Description: " + finalDesc);
-            System.out.println();
-            System.out.println("Available statuses: PENDING [P], ACTIVE [A], DONE [D], CANCEL [C]");
-
-            String input = JLineInputHelper.readLineWithDefault("Status: ", currentStatusInput).trim();
-
-            if (input.equalsIgnoreCase("M")) {
-                System.out.println("Task creation cancelled.");
-                pause();
-                return;
-            }
-
-            if (input.isBlank()) {
-                break;
-            }
-
-            TaskStatus parsedStatus = parseStatus(input);
-            if (parsedStatus != null) {
-                finalStatus = parsedStatus;
-                break;
-            } else {
-                System.out.println("Error: Invalid status format. Try again.");
-                currentStatusInput = input;
-                pause();
-            }
-        }
-
-        // 4. СОХРАНЕНИЕ
         try {
-            TaskRequestDTO requestDTO = new TaskRequestDTO(finalTitle, finalDesc, finalStatus);
+            // Контекст для создания пустой, так как мы идем строго по порядку
+            Runnable emptyContext = () -> {
+                System.out.println("--- CREATE TASK ---");
+                System.out.println("Type 'M' at any prompt to return to Main Menu");
+                System.out.println("-------------------------------------------------");
+            };
+
+            String title = readValidatedField("Title", "", ValidationUtils::validateTitle, false, emptyContext);
+
+            // Для description показываем уже введенный title
+            Runnable descContext = () -> {
+                emptyContext.run();
+                System.out.println("Title: " + title);
+            };
+            String description = readValidatedField("Description", "", ValidationUtils::validateDescription, false, descContext);
+
+            Runnable statusContext = () -> {
+                emptyContext.run();
+                System.out.println("Title: " + title);
+                System.out.println("Description: " + description);
+            };
+            TaskStatus status = readValidatedStatus(TaskStatus.PENDING, statusContext);
+
+            TaskRequestDTO requestDTO = new TaskRequestDTO(title, description, status);
             taskService.createTask(requestDTO);
+
+            clearScreen();
             System.out.println("\nTask created successfully!");
             pause();
-        } catch (ValidationException e) {
-            System.out.println("\nError: " + e.getMessage());
+
+        } catch (ReturnToMainMenuException e) {
+            System.out.println("\nTask creation cancelled.");
             pause();
+            throw e;
         } catch (Exception e) {
-            System.out.println("\n Unexpected error: " + e.getMessage());
+            System.out.println("\nUnexpected error: " + e.getMessage());
             pause();
         }
     }
 
     private void editSpecificTask(Long id) {
-        clearScreen();
-
         TaskResponseDTO taskDTO = taskService.getTaskById(id).orElse(null);
         if (taskDTO == null) {
             System.out.println("\nTask not found.");
@@ -327,123 +236,56 @@ public class ConsoleUI {
             return;
         }
 
-        System.out.println("=== EDIT TASK #" + id + " ===");
-        printTaskDetails(taskDTO);
-        System.out.println("\nTip: Press Enter to keep current value. Type 'M' to cancel.");
-        System.out.println("-----------------------------------------------------------");
-
-        // 1. TITLE
-        String finalTitle = taskDTO.title();
-        String currentTitleInput = finalTitle;
-
-        while (true) {
-            clearScreen();
+        // Базовый контекст редактирования
+        Runnable baseEditContext = () -> {
             System.out.println("=== EDIT TASK #" + id + " ===");
             printTaskDetails(taskDTO);
-            System.out.println("\nTip: Press Enter to keep current value. Type 'M' to cancel.");
+            System.out.println("\nPress Enter to keep current value. Type 'M' to cancel.");
             System.out.println("-----------------------------------------------------------");
+        };
 
-            String input = JLineInputHelper.readLineWithDefault("Title: ", currentTitleInput).trim();
-
-            if (input.equalsIgnoreCase("M")) {
-                System.out.println("Edit cancelled.");
-                pause();
-                return;
-            }
-
-            if (input.isBlank()) {
-                break;
-            }
-
-            try {
-                ValidationUtils.validateTitle(input);
-                finalTitle = input;
-                break;
-            } catch (ValidationException e) {
-                System.out.println(e.getMessage());
-                currentTitleInput = input;
-                pause();
-            }
-        }
-
-        // 2. DESCRIPTION
-        String finalDesc = taskDTO.description() != null ? taskDTO.description() : "";
-        String currentDescInput = finalDesc;
-
-        while (true) {
-            clearScreen();
-            System.out.println("=== EDIT TASK #" + id + " ===");
-            printTaskDetails(taskDTO);
-            System.out.println("\nTip: Press Enter to keep current value. Type 'M' to cancel.");
-            System.out.println("-----------------------------------------------------------");
-            System.out.println("Title: " + finalTitle); // Показываем уже введенное
-
-            String input = JLineInputHelper.readLineWithDefault("Description: ", currentDescInput).trim();
-
-            if (input.equalsIgnoreCase("M")) {
-                System.out.println("Edit cancelled.");
-                pause();
-                return;
-            }
-
-            if (input.isBlank()) {
-                break;
-            }
-
-            try {
-                ValidationUtils.validateDescription(input);
-                finalDesc = input;
-                break;
-            } catch (ValidationException e) {
-                System.out.println(e.getMessage());
-                currentDescInput = input;
-                pause();
-            }
-        }
-
-        // 3. STATUS
-        TaskStatus finalStatus = taskDTO.status();
-        String currentStatusInput = finalStatus.name();
-
-        while (true) {
-            clearScreen();
-            System.out.println("=== EDIT TASK #" + id + " ===");
-            printTaskDetails(taskDTO);
-            System.out.println("\nTip: Press Enter to keep current value. Type 'M' to cancel.");
-            System.out.println("-----------------------------------------------------------");
-            System.out.println("Title: " + finalTitle);
-            System.out.println("Description: " + finalDesc);
-            System.out.println("Available statuses: PENDING [P], ACTIVE [A], DONE [D], CANCEL [C]");
-
-            String input = JLineInputHelper.readLineWithDefault("Status: ", currentStatusInput).trim();
-
-            if (input.equalsIgnoreCase("M")) {
-                System.out.println("Edit cancelled.");
-                pause();
-                return;
-            }
-
-            if (input.isBlank()) {
-                break;
-            }
-
-            TaskStatus parsedStatus = parseStatus(input);
-            if (parsedStatus != null) {
-                finalStatus = parsedStatus;
-                break;
-            } else {
-                System.out.println("Invalid status format. Try again.");
-                currentStatusInput = input;
-                pause();
-            }
-        }
-
-        // 4. СОХРАНЕНИЕ
         try {
+            // 1. TITLE
+            String finalTitle = readValidatedField(
+                    "Title",
+                    taskDTO.title(),
+                    ValidationUtils::validateTitle,
+                    false,
+                    baseEditContext
+            );
+
+            // 2. DESCRIPTION (добавляем в контекст уже введенный title)
+            Runnable descContext = () -> {
+                baseEditContext.run();
+                System.out.println("Title: " + finalTitle);
+            };
+            String finalDesc = readValidatedField(
+                    "Description",
+                    taskDTO.description() != null ? taskDTO.description() : "",
+                    ValidationUtils::validateDescription,
+                    true,
+                    descContext
+            );
+
+            // 3. STATUS (добавляем в контекст title и description)
+            Runnable statusContext = () -> {
+                baseEditContext.run();
+                System.out.println("Title: " + finalTitle);
+                System.out.println("Description: " + (finalDesc.isEmpty() ? "(empty)" : finalDesc));
+            };
+            TaskStatus finalStatus = readValidatedStatus(taskDTO.status(), statusContext);
+
+            // 4. СОХРАНЕНИЕ
+            clearScreen();
             TaskRequestDTO updateDTO = new TaskRequestDTO(finalTitle, finalDesc, finalStatus);
             taskService.updateTask(id, updateDTO);
             System.out.println("\nTask updated successfully!");
             pause();
+
+        } catch (ReturnToMainMenuException e) {
+            System.out.println("\nEdit cancelled.");
+            pause();
+            throw e;
         } catch (Exception e) {
             System.out.println("\nUnexpected error: " + e.getMessage());
             pause();
@@ -482,54 +324,72 @@ public class ConsoleUI {
 
     // === ХЕЛПЕРЫ ВАЛИДАЦИИ ===
 
-    private String readValidatedTitle() {
-        String currentValue = "";
+    private String readValidatedField(String fieldName, String currentValue,
+                                      java.util.function.Consumer<String> validator,
+                                      boolean allowEmpty,
+                                      Runnable drawContext) {
+        String currentInput = currentValue != null ? currentValue : "";
 
         while (true) {
             clearScreen();
-            System.out.println("--- CREATE TASK ---");
-            System.out.println("Type 'M' at any prompt to return to Main Menu");
-            System.out.println("-------------------------------------------------");
+            if (drawContext != null) {
+                drawContext.run(); // Рисуем контекст (карточку задачи, предыдущие поля)
+            }
 
-            // Если уже что-то вводили, показываем это как значение по умолчанию
-            String input = JLineInputHelper.readLineWithDefault("Title: ", currentValue).trim();
+            String input = JLineInputHelper.readLineWithDefault(fieldName + ": ", currentInput).trim();
 
             if (input.equalsIgnoreCase("M")) {
                 throw new ReturnToMainMenuException();
             }
 
+            if (input.isBlank()) {
+                if (allowEmpty) {
+                    return currentValue != null ? currentValue : "";
+                } else {
+                    System.out.println(fieldName + " cannot be empty.");
+                    currentInput = "";
+                    pause();
+                    continue;
+                }
+            }
+
             try {
-                ValidationUtils.validateTitle(input);
+                validator.accept(input);
                 return input;
             } catch (ValidationException e) {
                 System.out.println(e.getMessage());
-                currentValue = input;
+                currentInput = input;
                 pause();
             }
         }
     }
 
-    private String readValidatedDescription() {
-        String currentValue = "";
+    private TaskStatus readValidatedStatus(TaskStatus currentStatus, Runnable drawContext) {
+        String currentInput = currentStatus != null ? currentStatus.name() : "PENDING";
 
         while (true) {
             clearScreen();
-            System.out.println("--- CREATE TASK ---");
-            System.out.println("Type 'M' at any prompt to return to Main Menu");
-            System.out.println("-------------------------------------------------");
+            if (drawContext != null) {
+                drawContext.run();
+            }
+            System.out.println("Available statuses: PENDING [P], ACTIVE [A], DONE [D], CANCEL [C]");
 
-            String input = JLineInputHelper.readLineWithDefault("Description: ", currentValue).trim();
+            String input = JLineInputHelper.readLineWithDefault("Status: ", currentInput).trim();
 
             if (input.equalsIgnoreCase("M")) {
                 throw new ReturnToMainMenuException();
             }
 
-            try {
-                ValidationUtils.validateDescription(input);
-                return input;
-            } catch (ValidationException e) {
-                System.out.println(e.getMessage());
-                currentValue = input;
+            if (input.isBlank()) {
+                return currentStatus != null ? currentStatus : TaskStatus.PENDING;
+            }
+
+            TaskStatus parsedStatus = parseStatus(input);
+            if (parsedStatus != null) {
+                return parsedStatus;
+            } else {
+                System.out.println("Invalid status format. Try again.");
+                currentInput = input;
                 pause();
             }
         }
