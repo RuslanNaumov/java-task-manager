@@ -187,19 +187,86 @@ public class ConsoleUI {
     }
 
     private void createTask() {
-        clearScreen();
-        System.out.println("--- CREATE TASK ---");
-        System.out.println("Type 'M' at any prompt to return to Main Menu");
-        System.out.println("-------------------------------------------------");
-
-        // 1. Валидация заголовка
-        String title = readValidatedTitle();
-
-        // 2. Валидация описания
-        String description = readValidatedDescription();
-
-        // 3. ПОЭТАПНЫЙ ВЫБОР СТАТУСА (с дефолтным значением)
+        String finalTitle = "";
+        String finalDesc = "";
         TaskStatus finalStatus = TaskStatus.PENDING;
+
+        // 1. ВВОД TITLE с показом контекста
+        while (true) {
+            clearScreen();
+            System.out.println("--- CREATE TASK ---");
+            System.out.println("Type 'M' at any prompt to return to Main Menu");
+            System.out.println("-------------------------------------------------");
+
+            // Если уже вводили description или status, показываем их
+            if (!finalDesc.isEmpty()) {
+                System.out.println("✓ Description: " + finalDesc);
+            }
+            if (finalStatus != TaskStatus.PENDING) {
+                System.out.println("✓ Status: " + finalStatus);
+            }
+
+            String input = JLineInputHelper.readLineWithDefault("Title: ", finalTitle).trim();
+
+            if (input.equalsIgnoreCase("M")) {
+                System.out.println("Task creation cancelled.");
+                pause();
+                return;
+            }
+
+            if (input.isBlank()) {
+                System.out.println("Title cannot be empty.");
+                pause();
+                continue;
+            }
+
+            try {
+                ValidationUtils.validateTitle(input);
+                finalTitle = input;
+                break; // Переходим к description
+            } catch (ValidationException e) {
+                System.out.println(e.getMessage());
+                pause();
+            }
+        }
+
+        // 2. ВВОД DESCRIPTION с показом контекста
+        while (true) {
+            clearScreen();
+            System.out.println("--- CREATE TASK ---");
+            System.out.println("Type 'M' at any prompt to return to Main Menu");
+            System.out.println("-------------------------------------------------");
+            System.out.println("Title: " + finalTitle);
+
+            if (finalStatus != TaskStatus.PENDING) {
+                System.out.println("✓ Status: " + finalStatus);
+            }
+
+            String input = JLineInputHelper.readLineWithDefault("Description: ", finalDesc).trim();
+
+            if (input.equalsIgnoreCase("M")) {
+                System.out.println("Task creation cancelled.");
+                pause();
+                return;
+            }
+
+            if (input.isBlank()) {
+                System.out.println("Description cannot be empty.");
+                pause();
+                continue;
+            }
+
+            try {
+                ValidationUtils.validateDescription(input);
+                finalDesc = input;
+                break;
+            } catch (ValidationException e) {
+                System.out.println(e.getMessage());
+                pause();
+            }
+        }
+
+        // 3. ВЫБОР STATUS с показом контекста
         String currentStatusInput = "PENDING";
 
         while (true) {
@@ -207,6 +274,9 @@ public class ConsoleUI {
             System.out.println("--- CREATE TASK ---");
             System.out.println("Type 'M' at any prompt to return to Main Menu");
             System.out.println("-------------------------------------------------");
+            System.out.println("Title: " + finalTitle);
+            System.out.println("Description: " + finalDesc);
+            System.out.println();
             System.out.println("Available statuses: PENDING [P], ACTIVE [A], DONE [D], CANCEL [C]");
 
             String input = JLineInputHelper.readLineWithDefault("Status: ", currentStatusInput).trim();
@@ -227,24 +297,22 @@ public class ConsoleUI {
                 break;
             } else {
                 System.out.println("Error: Invalid status format. Try again.");
-                currentStatusInput = input; //
+                currentStatusInput = input;
                 pause();
             }
         }
 
         // 4. СОХРАНЕНИЕ
         try {
-            // Создаем DTO с тремя параметрами (title, description, status)
-            TaskRequestDTO requestDTO = new TaskRequestDTO(title, description, finalStatus);
+            TaskRequestDTO requestDTO = new TaskRequestDTO(finalTitle, finalDesc, finalStatus);
             taskService.createTask(requestDTO);
-
             System.out.println("\nTask created successfully!");
             pause();
         } catch (ValidationException e) {
             System.out.println("\nError: " + e.getMessage());
             pause();
         } catch (Exception e) {
-            System.out.println("\nUnexpected error: " + e.getMessage());
+            System.out.println("\n Unexpected error: " + e.getMessage());
             pause();
         }
     }
