@@ -93,6 +93,22 @@ public class ConsoleUI {
     }
 
     private String displayTaskListAndHandleActions(List<TaskResponseDTO> tasks, String currentQuery) {
+        // 1. Если задач нет вообще, показываем только Empty State
+        if (tasks.isEmpty()) {
+            while (true) {
+                clearScreen();
+                System.out.println("No tasks found.");
+                System.out.println("Return to [M]enu and create  task");
+
+                String rawInput = JLineInputHelper.readLine("> ").trim();
+                if (rawInput.equalsIgnoreCase("M")) {
+                    throw new ReturnToMainMenuException();
+                }
+                // Игнорируем любой другой ввод, ждем только 'M'
+            }
+        }
+
+        // 2. ОСНОВНАЯ ЛОГИКА: Выполняется ТОЛЬКО если задачи есть
         int currentPage = 1;
         int totalPages = Math.max(1, (int) Math.ceil((double) tasks.size() / PAGE_SIZE));
 
@@ -106,12 +122,8 @@ public class ConsoleUI {
             List<TaskResponseDTO> pageTasks = tasks.subList(fromIndex, toIndex);
 
             printTableHeader();
-            if (pageTasks.isEmpty()) {
-                System.out.println("No tasks found.");
-            } else {
-                for (TaskResponseDTO task : pageTasks) {
-                    printTaskRow(task);
-                }
+            for (TaskResponseDTO task : pageTasks) {
+                printTaskRow(task);
             }
 
             if (currentQuery != null) {
@@ -151,6 +163,7 @@ public class ConsoleUI {
                         return "REFRESH";
                     } catch (NumberFormatException e) {
                         System.out.println("Invalid ID format: " + idStr);
+                        pause();
                     }
                 }
 
@@ -170,11 +183,13 @@ public class ConsoleUI {
                         return "REFRESH";
                     } catch (NumberFormatException e) {
                         System.out.println("Invalid ID format: " + idStr);
+                        pause();
                     }
                 }
 
                 default -> {
                     System.out.println("Invalid command: " + action);
+                    pause();
                 }
             }
         }
@@ -186,15 +201,57 @@ public class ConsoleUI {
         System.out.println("Type 'M' at any prompt to return to Main Menu");
         System.out.println("-------------------------------------------------");
 
+        // 1. Валидация заголовка
         String title = readValidatedTitle();
+
+        // 2. Валидация описания
         String description = readValidatedDescription();
 
+        // 3. ПОЭТАПНЫЙ ВЫБОР СТАТУСА (с дефолтным значением)
+        TaskStatus finalStatus = TaskStatus.PENDING; // Значение по умолчанию
+
+        while (true) {
+            System.out.println("Available statuses: PENDING (P), ACTIVE (A), DONE (D), CANCEL (C)");
+
+            // Показываем пользователю, что PENDING уже выбрано (в квадратных скобках)
+            String input = JLineInputHelper.readLineWithDefault("Status [PENDING]: ", "PENDING").trim();
+
+            if (input.equalsIgnoreCase("M")) {
+                System.out.println("Task creation cancelled.");
+                pause();
+                return;
+            }
+
+            // Если пользователь просто нажал Enter, оставляем PENDING и выходим из цикла
+            if (input.isBlank()) {
+                break;
+            }
+
+            // Иначе пытаемся распарсить введенный статус
+            TaskStatus parsedStatus = parseStatus(input);
+            if (parsedStatus != null) {
+                finalStatus = parsedStatus;
+                break; // Успех, выходим из цикла
+            } else {
+                System.out.println("Error: Invalid status format. Try again.");
+                // Цикл продолжается, заставляя ввести корректное значение
+            }
+        }
+
+        // 4. СОХРАНЕНИЕ
         try {
-            TaskRequestDTO requestDTO = TaskRequestDTO.forCreation(title, description);
+            // Создаем DTO с тремя параметрами (title, description, status)
+            TaskRequestDTO requestDTO = new TaskRequestDTO(title, description, finalStatus);
             taskService.createTask(requestDTO);
+
             System.out.println("\nTask created successfully!");
+            pause();
         } catch (ValidationException e) {
             System.out.println("\nError: " + e.getMessage());
+            pause();
+        } catch (Exception e) {
+            System.out.println("\nUnexpected error: " + e.getMessage());
+            pause();
         }
     }
 
@@ -202,70 +259,102 @@ public class ConsoleUI {
         TaskResponseDTO taskDTO = taskService.getTaskById(id).orElse(null);
         if (taskDTO == null) {
             System.out.println("\nTask not found.");
+            pause();
             return;
         }
 
+        System.out.println("=== EDIT TASK #" + id + " ===");
+        System.out.println("Press Enter to keep current value. Type 'M' to cancel.");
+        System.out.println("-----------------------------------------------------------");
+
+        // 1. ПОЭТАПНАЯ ВАЛИДАЦИЯ: TITLE
+        String finalTitle = taskDTO.title();
         while (true) {
-            clearScreen();
-            System.out.println("=== EDIT TASK #" + id + " ===");
-            System.out.println("Tip: Edit pre-filled values with arrow keys. Press Enter to keep current value.");
-            System.out.println("Type 'M' at any prompt to cancel and return to Main Menu.");
-            System.out.println("-----------------------------------------------------------");
+            String input = JLineInputHelper.readLineWithDefault("Title: ", finalTitle).trim();
 
-            String newTitle = JLineInputHelper.readLineWithDefault(
-                    "Title: ",
-                    taskDTO.title()
-            );
-            if (newTitle.equalsIgnoreCase("M")) {
+            if (input.equalsIgnoreCase("M")) {
                 System.out.println("Edit cancelled.");
+                pause();
                 return;
             }
 
-            String currentDesc = taskDTO.description() != null ? taskDTO.description() : "";
-            String newDesc = JLineInputHelper.readLineWithDefault(
-                    "Description: ",
-                    currentDesc
-            );
-            if (newDesc.equalsIgnoreCase("M")) {
+            // Если пользователь нажал Enter, оставляем старое значение и выходим из цикла
+            if (input.isBlank()) {
+                break;
+            }
+
+            // Иначе проверяем валидность НОВОГО значения
+            try {
+                ValidationUtils.validateTitle(input);
+                finalTitle = input;
+                break;
+            } catch (ValidationException e) {
+                System.out.println("Error: " + e.getMessage() + " Try again.");
+                // Цикл продолжается, заставляя пользователя ввести корректный title
+            }
+        }
+
+        // 2. ПОЭТАПНАЯ ВАЛИДАЦИЯ: DESCRIPTION
+        String finalDesc = taskDTO.description() != null ? taskDTO.description() : "";
+        while (true) {
+            String input = JLineInputHelper.readLineWithDefault("Description: ", finalDesc).trim();
+
+            if (input.equalsIgnoreCase("M")) {
                 System.out.println("Edit cancelled.");
+                pause();
                 return;
             }
 
-            System.out.println("Available statuses: PENDING (P), ACTIVE (A), DONE (D), CANCEL (C)");
-            String newStatusStr = JLineInputHelper.readLineWithDefault(
-                    "Status: ",
-                    taskDTO.status().name()
-            );
-            if (newStatusStr.equalsIgnoreCase("M")) {
-                System.out.println("Edit cancelled.");
-                return;
-            }
-
-            // Если пользователь нажал Enter (строка пустая), используем старое значение
-            if (newTitle.isBlank()) newTitle = taskDTO.title();
-            if (newDesc.isBlank()) newDesc = currentDesc;
-
-            TaskStatus newStatus = taskDTO.status();
-            if (!newStatusStr.isBlank()) {
-                TaskStatus parsedStatus = parseStatus(newStatusStr);
-                if (parsedStatus != null) {
-                    newStatus = parsedStatus;
-                } else {
-                    System.out.println("Invalid status format. Keeping old status.");
-                }
+            if (input.isBlank()) {
+                break;
             }
 
             try {
-                TaskRequestDTO updateDTO = new TaskRequestDTO(newTitle, newDesc, newStatus);
-                taskService.updateTask(id, updateDTO);
-                System.out.println("\nTask updated successfully!");
+                ValidationUtils.validateDescription(input);
+                finalDesc = input;
                 break;
             } catch (ValidationException e) {
-                System.out.println("\nError: " + e.getMessage());
-            } catch (Exception e) {
-                System.out.println("\nUnexpected error: " + e.getMessage());
+                System.out.println("Error: " + e.getMessage() + " Try again.");
+            }
+        }
+
+        // 3. ПОЭТАПНАЯ ВАЛИДАЦИЯ: STATUS
+        TaskStatus finalStatus = taskDTO.status();
+        while (true) {
+            System.out.println("Available statuses: PENDING (P), ACTIVE (A), DONE (D), CANCEL (C)");
+            String input = JLineInputHelper.readLineWithDefault("Status: ", finalStatus.name()).trim();
+
+            if (input.equalsIgnoreCase("M")) {
+                System.out.println("Edit cancelled.");
+                pause();
+                return;
+            }
+
+            if (input.isBlank()) {
                 break;
             }
+
+            TaskStatus parsedStatus = parseStatus(input);
+            if (parsedStatus != null) {
+                finalStatus = parsedStatus;
+                break;
+            } else {
+                System.out.println("Error: Invalid status format. Try again.");
+                // Цикл продолжается
+            }
+        }
+
+        // 4. СОХРАНЕНИЕ (Теперь данные валидны)
+        try {
+            TaskRequestDTO updateDTO = new TaskRequestDTO(finalTitle, finalDesc, finalStatus);
+            taskService.updateTask(id, updateDTO);
+            System.out.println("\nTask updated successfully!");
+            pause();
+        } catch (Exception e) {
+            // Этот блок сработает только в случае реальной ошибки БД,
+            // так как валидация UI уже прошла успешно.
+            System.out.println("\nUnexpected error: " + e.getMessage());
+            pause();
         }
     }
 
@@ -279,6 +368,7 @@ public class ConsoleUI {
                 return input;
             } catch (ValidationException e) {
                 System.out.println(e.getMessage() + " Try again.");
+                pause();
             }
         }
     }
@@ -291,6 +381,7 @@ public class ConsoleUI {
                 return input;
             } catch (ValidationException e) {
                 System.out.println(e.getMessage() + " Try again.");
+                pause();
             }
         }
     }
@@ -334,9 +425,11 @@ public class ConsoleUI {
                     return id;
                 } else {
                     System.out.println("Task with ID " + id + " not found in the current list. Try again.");
+                    pause();
                 }
             } catch (NumberFormatException e) {
                 System.out.println("Invalid ID format. Please enter a valid number (or 'M' to cancel).");
+                pause();
             }
         }
     }
@@ -346,8 +439,10 @@ public class ConsoleUI {
         if (confirm.equalsIgnoreCase("y")) {
             taskService.deleteTask(id);
             System.out.println("Task deleted successfully!");
+            pause();
         } else {
             System.out.println("Deletion cancelled.");
+            pause();
         }
     }
 
@@ -371,9 +466,11 @@ public class ConsoleUI {
             } else {
                 System.out.println("Failed to delete some files. They might be in use.");
             }
+            pause();
             System.exit(0);
         } else {
             System.out.println("\nOperation cancelled.");
+            pause();
         }
     }
 
@@ -469,6 +566,8 @@ public class ConsoleUI {
         return input;
     }
 
+    // === ВСПОМОГАТЕЛЬНЫЕ МЕТОДЫ ===
+
     private String parseAction(String input, int currentPage, int totalPages) {
         if (input == null || input.isBlank()) return "INVALID";
 
@@ -500,5 +599,13 @@ public class ConsoleUI {
             case "C", "CANCEL" -> TaskStatus.CANCEL;
             default -> null;
         };
+    }
+
+    private void pause() {
+        try {
+            Thread.sleep(1000);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
     }
 }

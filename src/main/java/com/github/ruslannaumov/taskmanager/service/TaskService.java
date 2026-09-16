@@ -3,7 +3,6 @@ package com.github.ruslannaumov.taskmanager.service;
 import com.github.ruslannaumov.taskmanager.dao.ITaskDao;
 import com.github.ruslannaumov.taskmanager.dto.TaskRequestDTO;
 import com.github.ruslannaumov.taskmanager.dto.TaskResponseDTO;
-import com.github.ruslannaumov.taskmanager.exception.ValidationException;
 import com.github.ruslannaumov.taskmanager.model.Task;
 import com.github.ruslannaumov.taskmanager.util.ValidationUtils;
 import org.slf4j.Logger;
@@ -23,15 +22,19 @@ public class TaskService implements ITaskService {
     }
 
     @Override
-    public TaskResponseDTO createTask(TaskRequestDTO requestDTO) {
+    public void createTask(TaskRequestDTO requestDTO) {
+        // 1. Валидация на уровне сервиса
         ValidationUtils.validateTitle(requestDTO.title());
         ValidationUtils.validateDescription(requestDTO.description());
+        ValidationUtils.validateStatus(requestDTO.status());
 
-        Task task = new Task(requestDTO.title(), requestDTO.description());
+        // 2. Маппинг
+        Task task = new Task();
+        task.setTitle(requestDTO.title());
+        task.setDescription(requestDTO.description());
+        task.setStatus(requestDTO.status());
+        // 3. Сохранение через DAO
         taskDao.save(task);
-
-        logger.info("Сервис создал задачу: {}", task.getTitle());
-        return TaskResponseDTO.from(task);
     }
 
     @Override
@@ -47,30 +50,21 @@ public class TaskService implements ITaskService {
     }
 
     @Override
-    public TaskResponseDTO updateTask(Long id, TaskRequestDTO requestDTO) {
-        Task task = taskDao.findById(id)
-                .orElseThrow(() -> new ValidationException("Задача с ID " + id + " не найдена."));
+    public void updateTask(Long id, TaskRequestDTO dto) {
+        Task existingTask = taskDao.findById(id).orElseThrow(() ->
+                new RuntimeException("Task not found with id: " + id)
+        );
 
-        // Применяем изменения только если новые данные не пустые
-        if (requestDTO.title() != null && !requestDTO.title().isBlank()) {
-            ValidationUtils.validateTitle(requestDTO.title());
-            task.setTitle(requestDTO.title());
-        }
+        ValidationUtils.validateTitle(dto.title());
+        ValidationUtils.validateDescription(dto.description());
+        ValidationUtils.validateStatus(dto.status());
 
-        if (requestDTO.description() != null && !requestDTO.description().isBlank()) {
-            ValidationUtils.validateDescription(requestDTO.description());
-            task.setDescription(requestDTO.description());
-        }
+        // Обновляем поля (сеттеры сами обновят updatedAt)
+        existingTask.setTitle(dto.title());
+        existingTask.setDescription(dto.description());
+        existingTask.setStatus(dto.status());
 
-        if (requestDTO.status() != null) {
-            ValidationUtils.validateStatus(requestDTO.status());
-            task.setStatus(requestDTO.status());
-        }
-
-        taskDao.update(task);
-        logger.info("Сервис обновил задачу ID: {}", id);
-
-        return TaskResponseDTO.from(task);
+        taskDao.update(existingTask);
     }
 
     @Override

@@ -15,10 +15,14 @@ public class ValidationUtils {
     }
 
     public static void validateDescription(String description) {
-        if (description == null || description.trim().length() < 2) {
+        if (description == null) {
+            throw new ValidationException("Description cannot be null.");
+        }
+        String trimmed = description.trim();
+        if (trimmed.length() < 2) {
             throw new ValidationException("Description must contain at least 2 characters.");
         }
-        if (description.length() > 100) {
+        if (trimmed.length() > 100) {
             throw new ValidationException("Description cannot be longer than 100 characters.");
         }
     }
