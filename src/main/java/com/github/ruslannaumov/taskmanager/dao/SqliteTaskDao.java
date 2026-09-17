@@ -1,5 +1,6 @@
 package com.github.ruslannaumov.taskmanager.dao;
 
+import com.github.ruslannaumov.taskmanager.exception.DatabaseException;
 import com.github.ruslannaumov.taskmanager.model.Task;
 import com.github.ruslannaumov.taskmanager.model.TaskStatus;
 import com.github.ruslannaumov.taskmanager.util.DatabaseConnection;
@@ -34,7 +35,8 @@ public class SqliteTaskDao implements ITaskDao {
             logger.info("Task saved to DB: {}", task.getTitle());
 
         } catch (SQLException e) {
-            logger.error("Error saving task", e);
+            logger.error("Database error", e);
+            throw new DatabaseException("Failed to execute database operation: " + e.getMessage(), e);
         }
     }
 
@@ -46,13 +48,12 @@ public class SqliteTaskDao implements ITaskDao {
         try (Connection conn = DatabaseConnection.getConnection();
              Statement stmt = conn.createStatement();
              ResultSet rs = stmt.executeQuery(sql)) {
-
             while (rs.next()) {
                 tasks.add(mapResultSetToTask(rs));
             }
-
         } catch (SQLException e) {
-            logger.error("Error loading tasks", e);
+            logger.error("Database error", e);
+            throw new DatabaseException("Failed to execute database operation: " + e.getMessage(), e);
         }
         return tasks;
     }
@@ -98,13 +99,12 @@ public class SqliteTaskDao implements ITaskDao {
                 }
             }
         } catch (SQLException e) {
-            logger.error("Error searching tasks", e);
+            logger.error("Database error", e);
+            throw new DatabaseException("Failed to execute database operation: " + e.getMessage(), e);
         }
 
         return tasks;
     }
-
-
 
     @Override
     public Optional<Task> findById(Long id) {
@@ -122,7 +122,8 @@ public class SqliteTaskDao implements ITaskDao {
             }
 
         } catch (SQLException e) {
-            logger.error("Error finding task by id: {}", id, e);
+            logger.error("Database error", e);
+            throw new DatabaseException("Failed to execute database operation: " + e.getMessage(), e);
         }
         return Optional.empty();
     }
@@ -144,7 +145,8 @@ public class SqliteTaskDao implements ITaskDao {
             logger.info("Task updated: {}", task.getTitle());
 
         } catch (SQLException e) {
-            logger.error("Error updating task", e);
+            logger.error("Database error", e);
+            throw new DatabaseException("Failed to execute database operation: " + e.getMessage(), e);
         }
     }
 
@@ -157,7 +159,8 @@ public class SqliteTaskDao implements ITaskDao {
             pstmt.setLong(1, id);
             pstmt.executeUpdate();
         } catch (SQLException e) {
-            logger.error("Error deleting task", e);
+            logger.error("Database error", e);
+            throw new DatabaseException("Failed to execute database operation: " + e.getMessage(), e);
         }
     }
 
@@ -182,7 +185,8 @@ public class SqliteTaskDao implements ITaskDao {
                 }
             }
         } catch (SQLException e) {
-            logger.error("Error loading tasks with pagination", e);
+            logger.error("Database error", e);
+            throw new DatabaseException("Failed to execute database operation: " + e.getMessage(), e);
         }
         return tasks;
     }
@@ -197,7 +201,8 @@ public class SqliteTaskDao implements ITaskDao {
                 return rs.getInt(1);
             }
         } catch (SQLException e) {
-            logger.error("Error counting tasks", e);
+            logger.error("Database error", e);
+            throw new DatabaseException("Failed to execute database operation: " + e.getMessage(), e);
         }
         return 0;
     }

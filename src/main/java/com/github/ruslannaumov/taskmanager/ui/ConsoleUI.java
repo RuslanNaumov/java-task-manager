@@ -3,6 +3,7 @@ package com.github.ruslannaumov.taskmanager.ui;
 import com.github.ruslannaumov.taskmanager.config.AppConfig;
 import com.github.ruslannaumov.taskmanager.dto.TaskRequestDTO;
 import com.github.ruslannaumov.taskmanager.dto.TaskResponseDTO;
+import com.github.ruslannaumov.taskmanager.exception.DatabaseException;
 import com.github.ruslannaumov.taskmanager.exception.ReturnToMainMenuException;
 import com.github.ruslannaumov.taskmanager.exception.ValidationException;
 import com.github.ruslannaumov.taskmanager.model.TaskStatus;
@@ -47,6 +48,10 @@ public class ConsoleUI {
                 }
             } catch (ReturnToMainMenuException e) {
                 clearScreen();
+            } catch (DatabaseException e) {
+                // Сюда попадет любая ошибка БД из createTask, viewTasks, delete и т.д.
+                displayFatalDatabaseError(e.getMessage());
+                running = false; // На случай, если System.exit(1) не сработает
             }
 
             if (running) {
@@ -187,8 +192,15 @@ public class ConsoleUI {
     }
 
     private void createTask() {
+        // ПРОВЕРКА ДОСТУПНОСТИ БД
         try {
-            // Контекст для создания пустой, так как мы идем строго по порядку
+            taskService.getTaskCount();
+        } catch (DatabaseException e) {
+            displayFatalDatabaseError(e.getMessage());
+            return;
+        }
+
+        try {
             Runnable emptyContext = () -> {
                 System.out.println("--- CREATE TASK ---");
                 System.out.println("Type 'M' at any prompt to return to Main Menu");
@@ -197,7 +209,6 @@ public class ConsoleUI {
 
             String title = readValidatedField("Title", "", ValidationUtils::validateTitle, false, emptyContext);
 
-            // Для description показываем уже введенный title
             Runnable descContext = () -> {
                 emptyContext.run();
                 System.out.println("Title: " + title);
@@ -208,6 +219,7 @@ public class ConsoleUI {
                 emptyContext.run();
                 System.out.println("Title: " + title);
                 System.out.println("Description: " + description);
+                System.out.println();
             };
             TaskStatus status = readValidatedStatus(TaskStatus.PENDING, statusContext);
 
@@ -218,6 +230,9 @@ public class ConsoleUI {
             System.out.println("\nTask created successfully!");
             pause();
 
+        } catch (DatabaseException e) {
+            // ПЕРЕХВАТ ОШИБКИ БД ПРИ СОХРАНЕНИИ
+            displayFatalDatabaseError(e.getMessage());
         } catch (ReturnToMainMenuException e) {
             System.out.println("\nTask creation cancelled.");
             pause();
@@ -229,6 +244,14 @@ public class ConsoleUI {
     }
 
     private void editSpecificTask(Long id) {
+        // ПРОВЕРКА ДОСТУПНОСТИ БД
+        try {
+            taskService.getTaskCount();
+        } catch (DatabaseException e) {
+            displayFatalDatabaseError(e.getMessage());
+            return;
+        }
+
         TaskResponseDTO taskDTO = taskService.getTaskById(id).orElse(null);
         if (taskDTO == null) {
             System.out.println("\nTask not found.");
@@ -236,7 +259,6 @@ public class ConsoleUI {
             return;
         }
 
-        // Базовый контекст редактирования
         Runnable baseEditContext = () -> {
             System.out.println("=== EDIT TASK #" + id + " ===");
             printTaskDetails(taskDTO);
@@ -245,43 +267,31 @@ public class ConsoleUI {
         };
 
         try {
-            // 1. TITLE
-            String finalTitle = readValidatedField(
-                    "Title",
-                    taskDTO.title(),
-                    ValidationUtils::validateTitle,
-                    false,
-                    baseEditContext
-            );
+            String finalTitle = readValidatedField("Title", taskDTO.title(), ValidationUtils::validateTitle, false, baseEditContext);
 
-            // 2. DESCRIPTION (добавляем в контекст уже введенный title)
             Runnable descContext = () -> {
                 baseEditContext.run();
                 System.out.println("Title: " + finalTitle);
             };
-            String finalDesc = readValidatedField(
-                    "Description",
-                    taskDTO.description() != null ? taskDTO.description() : "",
-                    ValidationUtils::validateDescription,
-                    true,
-                    descContext
-            );
+            String finalDesc = readValidatedField("Description", taskDTO.description() != null ? taskDTO.description() : "", ValidationUtils::validateDescription, true, descContext);
 
-            // 3. STATUS (добавляем в контекст title и description)
             Runnable statusContext = () -> {
                 baseEditContext.run();
                 System.out.println("Title: " + finalTitle);
                 System.out.println("Description: " + (finalDesc.isEmpty() ? "(empty)" : finalDesc));
+                System.out.println();
             };
             TaskStatus finalStatus = readValidatedStatus(taskDTO.status(), statusContext);
 
-            // 4. СОХРАНЕНИЕ
             clearScreen();
             TaskRequestDTO updateDTO = new TaskRequestDTO(finalTitle, finalDesc, finalStatus);
             taskService.updateTask(id, updateDTO);
             System.out.println("\nTask updated successfully!");
             pause();
 
+        } catch (DatabaseException e) {
+            // ПЕРЕХВАТ ОШИБКИ БД ПРИ СОХРАНЕНИИ
+            displayFatalDatabaseError(e.getMessage());
         } catch (ReturnToMainMenuException e) {
             System.out.println("\nEdit cancelled.");
             pause();
@@ -582,6 +592,34 @@ public class ConsoleUI {
             throw new ReturnToMainMenuException();
         }
         return input;
+    }
+
+    public void displayFatalDatabaseError(String details) {
+        clearScreen();
+
+        // Визуальное выделение ошибки
+        System.out.println("╔════════════════════════════════════════════════════════╗");
+        System.out.println("║                CRITICAL DATABASE ERROR                 ║");
+        System.out.println("╠════════════════════════════════════════════════════════╣");
+        System.out.println("║ Database connection lost or unavailable.               ║");
+        System.out.println("║ The application cannot function without the database.  ║");
+        System.out.println("╚════════════════════════════════════════════════════════╝");
+        System.out.println();
+        System.out.println("Technical details: " + details);
+        System.out.println();
+        System.out.println("Please ensure the database file is not corrupted, locked,");
+        System.out.println("or deleted, and that you have write permissions.");
+        System.out.println();
+
+        // Бесконечный цикл, пока пользователь не введет 'exit'
+        while (true) {
+            System.out.print("Type 'exit' to close the application: ");
+            String input = JLineInputHelper.readLine("> ").trim();
+            if (input.equalsIgnoreCase("exit")) {
+                System.out.println("Shutting down...");
+                System.exit(1); // 1 означает, что программа завершилась с ошибкой
+            }
+        }
     }
 
     // === ВСПОМОГАТЕЛЬНЫЕ МЕТОДЫ ===

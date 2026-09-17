@@ -8,6 +8,7 @@
         </encoder>
     </appender>
 
+
     <!-- 2. Настройка вывода в ФАЙЛ -->
     <appender name="FILE" class="ch.qos.logback.core.FileAppender">
         <file>${user.home}/.java-task-manager/logs/app.log</file>

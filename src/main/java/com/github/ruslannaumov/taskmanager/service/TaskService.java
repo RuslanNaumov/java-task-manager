@@ -92,4 +92,9 @@ public class TaskService implements ITaskService {
                 .map(TaskResponseDTO::from)
                 .collect(Collectors.toList());
     }
+
+    @Override
+    public int getTaskCount() {
+        return taskDao.count();
+    }
 }

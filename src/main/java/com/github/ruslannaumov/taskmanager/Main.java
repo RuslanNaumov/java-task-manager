@@ -3,6 +3,7 @@ package com.github.ruslannaumov.taskmanager;
 import com.github.ruslannaumov.taskmanager.dao.SqliteTaskDao;
 import com.github.ruslannaumov.taskmanager.dao.ITaskDao;
 import com.github.ruslannaumov.taskmanager.database.DatabaseInitializer;
+import com.github.ruslannaumov.taskmanager.exception.DatabaseException;
 import com.github.ruslannaumov.taskmanager.service.ITaskService;
 import com.github.ruslannaumov.taskmanager.service.TaskService;
 import com.github.ruslannaumov.taskmanager.ui.ConsoleUI;
@@ -19,14 +20,21 @@ public class Main {
 
         logger.info("Java Task Manager is starting...");
 
-        // 1. Инициализация БД
-        DatabaseInitializer.initialize();
+        // 1. Инициализация БД с защитой от фатальной ошибки
+        try {
+            DatabaseInitializer.initialize();
+        } catch (DatabaseException e) {
+            // Создаем UI без сервиса, чтобы показать экран ошибки
+            ConsoleUI errorUI = new ConsoleUI(null);
+            errorUI.displayFatalDatabaseError(e.getMessage());
+            return;
+        }
 
-        // 2. Создание зависимостей (связываем слои)
+        // 2. Создание зависимостей
         ITaskDao taskDao = new SqliteTaskDao();
         ITaskService taskService = new TaskService(taskDao);
 
-        // 3. Создание и запуск UI
+        // 3. Запуск UI
         ConsoleUI ui = new ConsoleUI(taskService);
         ui.start();
 

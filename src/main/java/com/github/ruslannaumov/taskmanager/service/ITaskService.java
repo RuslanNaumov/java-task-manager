@@ -8,11 +8,12 @@ import java.util.Optional;
 
 public interface ITaskService {
     void createTask(TaskRequestDTO requestDTO);
-    List<TaskResponseDTO> getAllTasks();
-    Optional<TaskResponseDTO> getTaskById(Long id);
     void updateTask(Long id, TaskRequestDTO requestDTO);
     void deleteTask(Long id);
+    List<TaskResponseDTO> getAllTasks();
     List<TaskResponseDTO> getTasksByPage(int page, int size);
-    int getTotalPages(int size);
     List<TaskResponseDTO> searchTasks(String query);
+    Optional<TaskResponseDTO> getTaskById(Long id);
+    int getTotalPages(int size);
+    int getTaskCount();
 }
