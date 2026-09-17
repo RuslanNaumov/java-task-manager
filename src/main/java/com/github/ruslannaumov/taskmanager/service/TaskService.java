@@ -80,10 +80,8 @@ public class TaskService implements ITaskService {
     }
 
     @Override
-    public int getTotalPages(int size) {
-        int totalTasks = taskDao.count();
-        if (totalTasks == 0) return 1;
-        return (int) Math.ceil((double) totalTasks / size);
+    public int getTotalPages(int count, int size) {
+        return Math.max(1, (int) Math.ceil((double) count / size));
     }
 
     @Override

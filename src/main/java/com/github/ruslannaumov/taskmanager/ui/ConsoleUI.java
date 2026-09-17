@@ -108,8 +108,7 @@ public class ConsoleUI {
 
         // 2. ОСНОВНАЯ ЛОГИКА: Выполняется ТОЛЬКО если задачи есть
         int currentPage = 1;
-        int totalPages = Math.max(1, (int) Math.ceil((double) tasks.size() / PAGE_SIZE));
-
+        int totalPages=taskService.getTotalPages(tasks.size(), PAGE_SIZE);
         while (true) {
             clearScreen();
             if (currentPage > totalPages) currentPage = totalPages;
@@ -135,6 +134,7 @@ public class ConsoleUI {
             System.out.println();
             printPaginationControls(currentPage, totalPages);
             System.out.println();
+
             String rawInput = JLineInputHelper.readLine(blue("> ")).trim();
 
             if (rawInput.equalsIgnoreCase("M")) {
@@ -726,4 +726,5 @@ public class ConsoleUI {
             Thread.currentThread().interrupt();
         }
     }
+
 }

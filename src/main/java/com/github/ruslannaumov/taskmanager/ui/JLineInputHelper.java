@@ -9,6 +9,7 @@ import java.io.IOException;
 
 public class JLineInputHelper {
 
+    private static Terminal terminal;
     private static LineReader lineReader;
 
     public static void init() {

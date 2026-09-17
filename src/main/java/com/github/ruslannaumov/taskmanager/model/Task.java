@@ -12,19 +12,17 @@ public class Task {
     private LocalDateTime updatedAt;
 
     public Task(){
-        this.status=TaskStatus.PENDING;
-        this.createdAt=LocalDateTime.now();
-        this.updatedAt=LocalDateTime.now();
+        this.status = TaskStatus.PENDING;
+        this.createdAt = LocalDateTime.now();
+        this.updatedAt = LocalDateTime.now();
     }
 
-    public Task(String title){
-        this();
-        this.title=title;
-    }
-
-    public Task(String title, String description){
-        this(title);
-        this.description=description;
+    public Task(String title, String description, TaskStatus status) {
+        this.title = title;
+        this.description = description;
+        this.status = status != null ? status : TaskStatus.PENDING;
+        this.createdAt = LocalDateTime.now();
+        this.updatedAt = LocalDateTime.now();
     }
 
     public Long getId() {
