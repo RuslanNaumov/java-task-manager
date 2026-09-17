@@ -9,6 +9,7 @@ import com.github.ruslannaumov.taskmanager.exception.ValidationException;
 import com.github.ruslannaumov.taskmanager.model.TaskStatus;
 import com.github.ruslannaumov.taskmanager.service.ITaskService;
 import com.github.ruslannaumov.taskmanager.util.ValidationUtils;
+import static com.github.ruslannaumov.taskmanager.util.ColorUtils.*;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -43,7 +44,8 @@ public class ConsoleUI {
                     case 3 -> clearDatabaseAndExit();
                     case 4 -> {
                         running = false;
-                        System.out.println("Goodbye!");
+                        System.out.println(green("Goodbye!"));
+                        pause();
                     }
                 }
             } catch (ReturnToMainMenuException e) {
@@ -71,7 +73,7 @@ public class ConsoleUI {
                 tasks = taskService.searchTasks(currentQuery);
                 if (tasks.isEmpty()) {
                     clearScreen();
-                    System.out.printf("No tasks found for query: \"%s\"%n", currentQuery);
+                    System.out.printf(red("No tasks found for query: \"%s\"%n"), currentQuery);
                     String newQuery = readValidSearchQuery();
                     currentQuery = newQuery;
                     continue;
@@ -93,10 +95,10 @@ public class ConsoleUI {
         if (tasks.isEmpty()) {
             while (true) {
                 clearScreen();
-                System.out.println("No tasks found.");
-                System.out.println("Return to [M]enu and create  task");
+                System.out.println(red("No tasks found."));
+                System.out.println(yellow("Return to [M]enu and create  task"));
 
-                String rawInput = JLineInputHelper.readLine("> ").trim();
+                String rawInput = JLineInputHelper.readLine(blue("> ")).trim();
                 if (rawInput.equalsIgnoreCase("M")) {
                     throw new ReturnToMainMenuException();
                 }
@@ -123,13 +125,17 @@ public class ConsoleUI {
             }
 
             if (currentQuery != null) {
-                System.out.printf("Page %d of %d (for the search query \"%s\")%n", currentPage, totalPages, currentQuery);
+                System.out.printf("Page %d of %d (for the search query \"%s\" - %d tasks)%n",
+                        currentPage, totalPages, currentQuery, tasks.size());
             } else {
-                System.out.printf("Page %d of %d (all tasks)%n", currentPage, totalPages);
+                System.out.printf("Page %d of %d (all tasks - %d)%n",
+                        currentPage, totalPages, tasks.size());
             }
-            printPaginationControls(currentPage, totalPages);
 
-            String rawInput = JLineInputHelper.readLine("> ").trim();
+            System.out.println();
+            printPaginationControls(currentPage, totalPages);
+            System.out.println();
+            String rawInput = JLineInputHelper.readLine(blue("> ")).trim();
 
             if (rawInput.equalsIgnoreCase("M")) {
                 throw new ReturnToMainMenuException();
@@ -143,11 +149,15 @@ public class ConsoleUI {
                 case "PREV" -> { currentPage--; continue; }
                 case "MENU" -> { throw new ReturnToMainMenuException(); }
 
-                case "EDIT" -> {
-                    Long id = readValidTaskIdFromDTOList(tasks, "Enter Task ID to edit (or 'M' for Main Menu): ");
-                    if (id != null) {
-                        editSpecificTask(id);
+                case String viewCmd when viewCmd.startsWith("VIEW:") -> {
+                    String idStr = viewCmd.substring(5);
+                    try {
+                        long parsedId = Long.parseLong(idStr);
+                        viewSpecificTask(parsedId);
                         return "REFRESH";
+                    } catch (NumberFormatException e) {
+                        System.out.println(red("Invalid ID format: " + idStr));
+                        pause();
                     }
                 }
 
@@ -158,16 +168,8 @@ public class ConsoleUI {
                         editSpecificTask(parsedId);
                         return "REFRESH";
                     } catch (NumberFormatException e) {
-                        System.out.println("Invalid ID format: " + idStr);
+                        System.out.println(red("Invalid ID format: " + idStr));
                         pause();
-                    }
-                }
-
-                case "DELETE" -> {
-                    Long id = readValidTaskIdFromDTOList(tasks, "Enter Task ID to delete (or 'M' for Main Menu): ");
-                    if (id != null) {
-                        deleteSpecificTask(id);
-                        return "REFRESH";
                     }
                 }
 
@@ -178,13 +180,13 @@ public class ConsoleUI {
                         deleteSpecificTask(parsedId);
                         return "REFRESH";
                     } catch (NumberFormatException e) {
-                        System.out.println("Invalid ID format: " + idStr);
+                        System.out.println(red("Invalid ID format: " + idStr));
                         pause();
                     }
                 }
 
                 default -> {
-                    System.out.println("Invalid command: " + action);
+                    System.out.println(red("Invalid command"));
                     pause();
                 }
             }
@@ -202,43 +204,44 @@ public class ConsoleUI {
 
         try {
             Runnable emptyContext = () -> {
-                System.out.println("--- CREATE TASK ---");
-                System.out.println("Type 'M' at any prompt to return to Main Menu");
-                System.out.println("-------------------------------------------------");
+                System.out.println(bold("CREATE TASK"));
+                System.out.println();
+                System.out.println(bold("You must fill in the fields: title, description, status"));
+                System.out.println();
+                System.out.println(yellow("Type [M] at any prompt to return to Main Menu"));
+                System.out.println();
             };
 
             String title = readValidatedField("Title", "", ValidationUtils::validateTitle, false, emptyContext);
 
             Runnable descContext = () -> {
                 emptyContext.run();
-                System.out.println("Title: " + title);
+                System.out.println(bold("Title: " + title));
             };
             String description = readValidatedField("Description", "", ValidationUtils::validateDescription, false, descContext);
 
             Runnable statusContext = () -> {
                 emptyContext.run();
-                System.out.println("Title: " + title);
-                System.out.println("Description: " + description);
-                System.out.println();
+                System.out.println(bold("Title: " + title));
+                System.out.println(bold("Description: " + description));
             };
             TaskStatus status = readValidatedStatus(TaskStatus.PENDING, statusContext);
 
             TaskRequestDTO requestDTO = new TaskRequestDTO(title, description, status);
             taskService.createTask(requestDTO);
 
-            clearScreen();
-            System.out.println("\nTask created successfully!");
+            System.out.println(green("Task created successfully!"));
             pause();
 
         } catch (DatabaseException e) {
             // ПЕРЕХВАТ ОШИБКИ БД ПРИ СОХРАНЕНИИ
             displayFatalDatabaseError(e.getMessage());
         } catch (ReturnToMainMenuException e) {
-            System.out.println("\nTask creation cancelled.");
+            System.out.println(red("Task creation cancelled."));
             pause();
             throw e;
         } catch (Exception e) {
-            System.out.println("\nUnexpected error: " + e.getMessage());
+            System.out.println(red("Unexpected error: " + e.getMessage()));
             pause();
         }
     }
@@ -254,16 +257,18 @@ public class ConsoleUI {
 
         TaskResponseDTO taskDTO = taskService.getTaskById(id).orElse(null);
         if (taskDTO == null) {
-            System.out.println("\nTask not found.");
+            System.out.println(red("Task with ID " + id + " not found."));
             pause();
             return;
         }
 
         Runnable baseEditContext = () -> {
-            System.out.println("=== EDIT TASK #" + id + " ===");
+            System.out.println(bold("EDIT TASK #" + id));
+            System.out.println();
             printTaskDetails(taskDTO);
-            System.out.println("\nPress Enter to keep current value. Type 'M' to cancel.");
-            System.out.println("-----------------------------------------------------------");
+            System.out.println();
+            System.out.println(yellow("Press Enter to keep current value. Type [M] to cancel."));
+            System.out.println();
         };
 
         try {
@@ -271,64 +276,112 @@ public class ConsoleUI {
 
             Runnable descContext = () -> {
                 baseEditContext.run();
-                System.out.println("Title: " + finalTitle);
+                System.out.println(bold("Title: " + finalTitle));
             };
             String finalDesc = readValidatedField("Description", taskDTO.description() != null ? taskDTO.description() : "", ValidationUtils::validateDescription, true, descContext);
 
             Runnable statusContext = () -> {
                 baseEditContext.run();
-                System.out.println("Title: " + finalTitle);
-                System.out.println("Description: " + (finalDesc.isEmpty() ? "(empty)" : finalDesc));
-                System.out.println();
+                System.out.println(bold("Title: " + finalTitle));
+                System.out.println(bold("Description: " + (finalDesc.isEmpty() ? "(empty)" : finalDesc)));
             };
             TaskStatus finalStatus = readValidatedStatus(taskDTO.status(), statusContext);
 
-            clearScreen();
             TaskRequestDTO updateDTO = new TaskRequestDTO(finalTitle, finalDesc, finalStatus);
             taskService.updateTask(id, updateDTO);
-            System.out.println("\nTask updated successfully!");
+            System.out.println(green("Task updated successfully!"));
             pause();
 
         } catch (DatabaseException e) {
             // ПЕРЕХВАТ ОШИБКИ БД ПРИ СОХРАНЕНИИ
             displayFatalDatabaseError(e.getMessage());
         } catch (ReturnToMainMenuException e) {
-            System.out.println("\nEdit cancelled.");
+            System.out.println(red("Edit cancelled."));
             pause();
             throw e;
         } catch (Exception e) {
-            System.out.println("\nUnexpected error: " + e.getMessage());
+            System.out.println(red("Unexpected error: " + e.getMessage()));
             pause();
         }
     }
 
     private void deleteSpecificTask(Long id) {
-        clearScreen();
-        // 1. ПРОВЕРКА СУЩЕСТВОВАНИЯ ЗАДАЧИ
+        // 1. Проверка существования задачи (БЕЗ очистки экрана)
         var taskDTO = taskService.getTaskById(id).orElse(null);
         if (taskDTO == null) {
-            System.out.println("\nTask with ID " + id + " not found.");
+            System.out.println(red("Task with ID " + id + " not found."));
+            pause();
+            return; // Возвращаемся к списку, экран не стерт
+        }
+
+        // 2. Если задача найдена, очищаем экран и показываем подтверждение
+        clearScreen();
+        System.out.println(bold("DELETE TASK #" + id));
+        System.out.println();
+        printTaskDetails(taskDTO);
+        System.out.println();
+        System.out.println(yellow("Warning: This action cannot be undone."));
+        System.out.println();
+
+        // 3. Подтверждение удаления
+        String confirm = JLineInputHelper.readLine(blue("Are you sure you want to delete task #" + id + " (y/n): ")).trim();
+
+        if (confirm.equalsIgnoreCase("y")) {
+            taskService.deleteTask(id);
+            System.out.println(green("Task deleted successfully!"));
+            pause();
+        } else {
+            System.out.println(red("Deletion cancelled."));
+            pause();
+        }
+    }
+
+    private void viewSpecificTask(Long id) {
+        // 1. Проверка существования задачи (БЕЗ очистки экрана)
+        var taskDTO = taskService.getTaskById(id).orElse(null);
+        if (taskDTO == null) {
+            System.out.println(red("Task with ID " + id + " not found."));
             pause();
             return;
         }
 
-        System.out.println("=== DELETE TASK #" + id + " ===");
-        printTaskDetails(taskDTO);
-        System.out.println("-----------------------------------------------------------");
-        System.out.println("Confirmation is required, or press 'M' to cancel.");
+        // Флаг для управления показом ошибки и последующей перерисовкой
+        boolean showError = false;
 
-        // 2. ПОДТВЕРЖДЕНИЕ УДАЛЕНИЯ
-        String confirm = JLineInputHelper.readLine(
-                "\nAre you sure you want to delete task #" + id + " (\"" + taskDTO.title() + "\")? (y/n): "
-        ).trim();
+        while (true) {
+            // Если в предыдущем цикле была ошибка, показываем её, делаем паузу и сбрасываем флаг
+            if (showError) {
+                System.out.println(red("Invalid command. Please type [B] or [M]."));
+                pause();
+                showError = false;
+            }
 
-        if (confirm.equalsIgnoreCase("y")) {
-            taskService.deleteTask(id);
-            System.out.println("Task deleted successfully!");
-            pause();
-        } else {
-            System.out.println("Deletion cancelled.");
-            pause();
+            // 2. Очищаем экран и рисуем детали задачи (выполняется при первом входе и после каждой ошибки)
+            clearScreen();
+            System.out.println(bold("VIEW TASK #" + id));
+            System.out.println();
+            System.out.printf(bold("ID: %d%n"), taskDTO.id());
+            System.out.printf(bold("Title: %s%n"), taskDTO.title());
+            System.out.printf(bold("Description: %s%n"), taskDTO.description() != null ? taskDTO.description() : "(empty)");
+            System.out.printf(bold("Status: %s%n"), taskDTO.status());
+            System.out.printf(bold("Created: %s%n"), taskDTO.createdAt() != null ? taskDTO.createdAt().toString() : "N/A");
+            System.out.printf(bold("Updated: %s%n"), taskDTO.updatedAt() != null ? taskDTO.updatedAt().toString() : "N/A");
+            System.out.println();
+            System.out.println(yellow("Type [B] to go back to the list, or [M] to return to the Main Menu."));
+            System.out.println();
+
+            // 3. Читаем ввод
+            String input = JLineInputHelper.readLine(blue("> ")).trim().toUpperCase();
+
+            if (input.equals("B")) {
+                return; // Выходим, возвращаем "REFRESH" в список
+            } else if (input.equals("M")) {
+                throw new ReturnToMainMenuException(); // Возврат в главное меню
+            } else {
+                // Если ввод некорректный, устанавливаем флаг.
+                // На следующей итерации цикла сработает блок if (showError), покажет ошибку, сделает pause() и перерисует экран.
+                showError = true;
+            }
         }
     }
 
@@ -346,7 +399,7 @@ public class ConsoleUI {
                 drawContext.run(); // Рисуем контекст (карточку задачи, предыдущие поля)
             }
 
-            String input = JLineInputHelper.readLineWithDefault(fieldName + ": ", currentInput).trim();
+            String input = JLineInputHelper.readLineWithDefault(blue(fieldName + ": "), currentInput).trim();
 
             if (input.equalsIgnoreCase("M")) {
                 throw new ReturnToMainMenuException();
@@ -356,7 +409,7 @@ public class ConsoleUI {
                 if (allowEmpty) {
                     return currentValue != null ? currentValue : "";
                 } else {
-                    System.out.println(fieldName + " cannot be empty.");
+                    System.out.println(red(fieldName + " cannot be empty."));
                     currentInput = "";
                     pause();
                     continue;
@@ -367,7 +420,7 @@ public class ConsoleUI {
                 validator.accept(input);
                 return input;
             } catch (ValidationException e) {
-                System.out.println(e.getMessage());
+                System.out.println(red(e.getMessage()));
                 currentInput = input;
                 pause();
             }
@@ -382,9 +435,9 @@ public class ConsoleUI {
             if (drawContext != null) {
                 drawContext.run();
             }
-            System.out.println("Available statuses: PENDING [P], ACTIVE [A], DONE [D], CANCEL [C]");
+            System.out.println(yellow("Available statuses: PENDING [P], ACTIVE [A], DONE [D], CANCEL [C]"));
 
-            String input = JLineInputHelper.readLineWithDefault("Status: ", currentInput).trim();
+            String input = JLineInputHelper.readLineWithDefault(blue("Status: "), currentInput).trim();
 
             if (input.equalsIgnoreCase("M")) {
                 throw new ReturnToMainMenuException();
@@ -398,7 +451,7 @@ public class ConsoleUI {
             if (parsedStatus != null) {
                 return parsedStatus;
             } else {
-                System.out.println("Invalid status format. Try again.");
+                System.out.println(red("Invalid status format. Try again."));
                 currentInput = input;
                 pause();
             }
@@ -409,31 +462,31 @@ public class ConsoleUI {
         while (true) {
             clearScreen();
             printMainMenu();
-            String input = JLineInputHelper.readLine("Select option (1-4): ").trim();
+            String input = JLineInputHelper.readLine(blue("Select option (1-4): ")).trim();
             if (input.equals("1") || input.equals("2") || input.equals("3") || input.equals("4")) {
                 return Integer.parseInt(input);
             }
-            System.out.println("Invalid option. Please enter a number between 1 and 4.");
+            System.out.println(red("Invalid option. Please enter a number between 1 and 4."));
             pause();
         }
     }
 
     private String readValidSearchQuery() {
         while (true) {
-            String input = JLineInputHelper.readLine("Enter search query (or 'M' for Main Menu): ").trim();
+            String input = JLineInputHelper.readLine(blue("Enter search query (or 'M' for Main Menu): ")).trim();
             if (input.equalsIgnoreCase("M")) {
                 throw new ReturnToMainMenuException();
             }
             if (!input.isBlank()) {
                 return input;
             }
-            System.out.println("Search query cannot be empty. Please enter at least 1 character.");
+            System.out.println(red("Search query cannot be empty. Please enter at least 1 character."));
         }
     }
 
     private Long readValidTaskIdFromDTOList(List<TaskResponseDTO> validTasks, String prompt) {
         while (true) {
-            String input = JLineInputHelper.readLine(prompt).trim();
+            String input = JLineInputHelper.readLine(blue(prompt)).trim();
 
             if (input.equalsIgnoreCase("M")) {
                 throw new ReturnToMainMenuException();
@@ -446,11 +499,11 @@ public class ConsoleUI {
                 if (exists) {
                     return id;
                 } else {
-                    System.out.println("Task with ID " + id + " not found in the current list. Try again.");
+                    System.out.println(red("Task with ID " + id + " not found in the current list. Try again."));
                     pause();
                 }
             } catch (NumberFormatException e) {
-                System.out.println("Invalid ID format. Please enter a valid number (or 'M' to cancel).");
+                System.out.println(red("Invalid ID format. Please enter a valid number (or 'M' to cancel)."));
                 pause();
             }
         }
@@ -458,28 +511,29 @@ public class ConsoleUI {
 
     private void clearDatabaseAndExit() {
         clearScreen();
-        System.out.println("WARNING: DANGEROUS ACTION");
+        System.out.println(red("WARNING: DANGEROUS ACTION"));
+        System.out.println();
         System.out.println("This will PERMANENTLY DELETE the entire application folder:");
-        System.out.println("   " + AppConfig.getAppDir());
+        System.out.println(AppConfig.getAppDir());
         System.out.println("All tasks, logs, and settings will be lost FOREVER.");
         System.out.println();
 
-        String confirm = JLineInputHelper.readLine("Type 'DELETE' to confirm, or 'M' to cancel: ").trim();
+        String confirm = JLineInputHelper.readLine(blue("Type \"DELETE\" or any character to cancel: ")).trim();
 
         if (confirm.equalsIgnoreCase("DELETE")) {
-            System.out.println("\nDeleting application data...");
+            System.out.println(green("Deleting application data..."));
             boolean success = AppConfig.deleteAppDirectory();
 
             if (success) {
                 System.out.println("Application data cleared successfully.");
                 System.out.println("The application will now exit.");
             } else {
-                System.out.println("Failed to delete some files. They might be in use.");
+                System.out.println(red("Failed to delete some files. They might be in use."));
             }
             pause();
             System.exit(0);
         } else {
-            System.out.println("\nOperation cancelled.");
+            System.out.println(red("Operation cancelled."));
             pause();
         }
     }
@@ -487,20 +541,28 @@ public class ConsoleUI {
     // === ОТРИСОВКА ===
 
     private void printMainMenu() {
-        System.out.println("=== TASK MANAGER ===");
-        System.out.println("1. ➕ Add Task");
-        System.out.println("2. 📋 View Tasks");
-        System.out.println("3. 🧹 Clear Database & Exit");
-        System.out.println("4. 🚪 Exit");
-        System.out.println("====================");
+        System.out.println(bold("======= TASK MANAGER ======="));
+        System.out.println();
+        System.out.println();
+        System.out.println(bold("1. ➕ Add Task"));
+        System.out.println();
+        System.out.println(bold("2. 📋 View Tasks"));
+        System.out.println();
+        System.out.println(bold("3. 🧹 Clear Database & Exit"));
+        System.out.println();
+        System.out.println(bold("4. 🚪 Exit"));
+        System.out.println();
+        System.out.println();
+        System.out.println(bold("============================"));
+        System.out.println();
     }
 
     private void printTableHeader() {
         int totalWidth = COL_ID + COL_TITLE + COL_DESC + COL_STATUS + 10;
-        System.out.println("=".repeat(totalWidth));
-        System.out.printf("%" + COL_ID + "s | %-" + COL_TITLE + "s | %-" + COL_DESC + "s | %s%n",
+        System.out.println(bold("=").repeat(totalWidth));
+        System.out.printf(bold("%" + COL_ID + "s | %-" + COL_TITLE + "s | %-" + COL_DESC + "s | %s%n"),
                 "ID", "TITLE", "DESCRIPTION", "STATUS");
-        System.out.println("=".repeat(totalWidth));
+        System.out.println(bold("=").repeat(totalWidth));
     }
 
     private void printTaskRow(TaskResponseDTO task) {
@@ -516,32 +578,32 @@ public class ConsoleUI {
             String descStr = (i < descLines.size()) ? String.format("%-" + COL_DESC + "s", descLines.get(i)) : " ".repeat(COL_DESC);
             String statusStr = (i == 0) ? task.status().toString() : "";
 
-            System.out.printf("%s | %s | %s | %s%n", idStr, titleStr, descStr, statusStr);
+            System.out.printf(bold("%s | %s | %s | %s%n"), idStr, titleStr, descStr, statusStr);
         }
-        System.out.println("-".repeat(COL_ID + COL_TITLE + COL_DESC + COL_STATUS + 10));
+        System.out.println(bold("-").repeat(COL_ID + COL_TITLE + COL_DESC + COL_STATUS + 10));
     }
 
     private void printPaginationControls(int currentPage, int totalPages) {
         if (totalPages <= 1) {
-            System.out.println("[M]enu | [S]earch");
+            System.out.println(yellow("[M]enu | [S]earch"));
         } else {
             List<String> controls = new ArrayList<>();
             if (currentPage > 1) controls.add("[P]rev");
             if (currentPage < totalPages) controls.add("[N]ext");
             controls.add("[M]enu");
             controls.add("[S]earch");
-            System.out.println(String.join(" | ", controls));
+            System.out.println(yellow(String.join(" | ", controls)));
         }
-        System.out.println("OR type [E]<id> to Edit | [D]<id> to Delete (e.g., E10, D2)");
+        System.out.println(yellow("OR Type [V]<id> to View | [E]<id> to Edit | [D]<id> to Delete (e.g., E10, D2)"));
     }
 
     private void printTaskDetails(TaskResponseDTO task) {
-        System.out.printf("ID: %d%n", task.id());
-        System.out.printf("Title: %s%n", task.title());
-        System.out.printf("Description: %s%n", task.description() != null ? task.description() : "(empty)");
-        System.out.printf("Status: %s%n", task.status());
-        System.out.printf("Created: %s%n", task.createdAt() != null ? task.createdAt().toString() : "N/A");
-        System.out.printf("Updated: %s%n", task.updatedAt() != null ? task.updatedAt().toString() : "N/A");
+        System.out.printf(bold("ID: %d%n"), task.id());
+        System.out.printf(bold("Title: %s%n"), task.title());
+        System.out.printf(bold("Description: %s%n"), task.description() != null ? task.description() : "(empty)");
+        System.out.printf(bold("Status: %s%n"), task.status());
+        System.out.printf(bold("Created: %s%n"), task.createdAt() != null ? task.createdAt().toString() : "N/A");
+        System.out.printf(bold("Updated: %s%n"), task.updatedAt() != null ? task.updatedAt().toString() : "N/A");
     }
 
     private List<String> wrapText(String text, int width) {
@@ -587,7 +649,7 @@ public class ConsoleUI {
     }
 
     private String readInputWithEscape(String prompt) {
-        String input = JLineInputHelper.readLine(prompt).trim();
+        String input = JLineInputHelper.readLine(blue(prompt)).trim();
         if (input.equalsIgnoreCase("M")) {
             throw new ReturnToMainMenuException();
         }
@@ -598,12 +660,12 @@ public class ConsoleUI {
         clearScreen();
 
         // Визуальное выделение ошибки
-        System.out.println("╔════════════════════════════════════════════════════════╗");
-        System.out.println("║                CRITICAL DATABASE ERROR                 ║");
-        System.out.println("╠════════════════════════════════════════════════════════╣");
-        System.out.println("║ Database connection lost or unavailable.               ║");
-        System.out.println("║ The application cannot function without the database.  ║");
-        System.out.println("╚════════════════════════════════════════════════════════╝");
+        System.out.println(red("╔════════════════════════════════════════════════════════╗"));
+        System.out.println(red("║                CRITICAL DATABASE ERROR                 ║"));
+        System.out.println(red("╠════════════════════════════════════════════════════════╣"));
+        System.out.println(red("║ Database connection lost or unavailable.               ║"));
+        System.out.println(red("║ The application cannot function without the database.  ║"));
+        System.out.println(red("╚════════════════════════════════════════════════════════╝"));
         System.out.println();
         System.out.println("Technical details: " + details);
         System.out.println();
@@ -613,8 +675,8 @@ public class ConsoleUI {
 
         // Бесконечный цикл, пока пользователь не введет 'exit'
         while (true) {
-            System.out.print("Type 'exit' to close the application: ");
-            String input = JLineInputHelper.readLine("> ").trim();
+            System.out.print(yellow("Type 'exit' to close the application: "));
+            String input = JLineInputHelper.readLine(blue("> ")).trim();
             if (input.equalsIgnoreCase("exit")) {
                 System.out.println("Shutting down...");
                 System.exit(1); // 1 означает, что программа завершилась с ошибкой
@@ -629,16 +691,16 @@ public class ConsoleUI {
 
         String upper = input.toUpperCase().trim();
 
-        if (upper.matches("^[ED]\\d+$")) {
+        if (upper.matches("^[EDV]\\d+$")) {
             char action = upper.charAt(0);
             String id = upper.substring(1);
-            return (action == 'E' ? "EDIT:" : "DELETE:") + id;
+            if (action == 'E') return "EDIT:" + id;
+            if (action == 'D') return "DELETE:" + id;
+            if (action == 'V') return "VIEW:" + id;
         }
 
         return switch (upper) {
             case "S" -> "SEARCH";
-            case "E" -> "EDIT";
-            case "D" -> "DELETE";
             case "N" -> (currentPage < totalPages) ? "NEXT" : "INVALID";
             case "P" -> (currentPage > 1) ? "PREV" : "INVALID";
             case "M" -> "MENU";

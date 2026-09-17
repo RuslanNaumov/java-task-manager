@@ -1,12 +1,12 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <configuration>
     <!-- 1. Настройка вывода в КОНСОЛЬ -->
-    <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
-        <encoder>
-            <!-- Формат сообщения: время | уровень | имя класса | сообщение -->
-            <pattern>%d{HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n</pattern>
-        </encoder>
-    </appender>
+<!--    <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">-->
+<!--        <encoder>-->
+<!--            &lt;!&ndash; Формат сообщения: время | уровень | имя класса | сообщение &ndash;&gt;-->
+<!--            <pattern>%d{HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n</pattern>-->
+<!--        </encoder>-->
+<!--    </appender>-->
 
 
     <!-- 2. Настройка вывода в ФАЙЛ -->
@@ -19,12 +19,12 @@
     </appender>
 
     <!-- 3. Уровни логирования для конкретных пакетов -->
-    <logger name="com.github.ruslannaumov" level="DEBUG"/>
+    <logger name="com.github.ruslannaumov" level="TRICE"/>
     <logger name="org.sqlite" level="WARN"/>
 
     <!-- 4. Корневой логгер: куда писать по умолчанию -->
     <root level="INFO">
-        <appender-ref ref="CONSOLE"/>
+<!--        <appender-ref ref="CONSOLE"/>-->
         <appender-ref ref="FILE"/>
     </root>
 </configuration>
