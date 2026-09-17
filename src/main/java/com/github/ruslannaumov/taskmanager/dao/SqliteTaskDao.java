@@ -11,7 +11,6 @@ import java.sql.*;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Locale;
 import java.util.Optional;
 
 public class SqliteTaskDao implements ITaskDao {
@@ -58,49 +57,44 @@ public class SqliteTaskDao implements ITaskDao {
         return tasks;
     }
 
+    @Override
     public List<Task> search(String query) {
         List<Task> tasks = new ArrayList<>();
 
+        // 1. Защита от пустых запросов
         if (query == null || query.isBlank()) {
             return tasks;
         }
 
-        String searchText = query.trim().toLowerCase(Locale.ROOT);
+        // 2. Формируем шаблон для поиска: %запрос%
+        String searchPattern = "%" + query.trim() + "%";
 
+        // 3. SQL-запрос с оператором LIKE
         String sql = """
             SELECT id, title, description, status, created_at, updated_at
             FROM tasks
-            ORDER BY created_at ASC 
+            WHERE title LIKE ? 
+               OR description LIKE ? 
+               OR status LIKE ?
+            ORDER BY created_at ASC
             """;
 
         try (Connection conn = DatabaseConnection.getConnection();
-             PreparedStatement pstmt = conn.prepareStatement(sql);
-             ResultSet rs = pstmt.executeQuery()) {
+             PreparedStatement pstmt = conn.prepareStatement(sql)) {
 
-            while (rs.next()) {
-                Task task = mapResultSetToTask(rs);
+            // 4. Подставляем шаблон
+            pstmt.setString(1, searchPattern);
+            pstmt.setString(2, searchPattern);
+            pstmt.setString(3, searchPattern);
 
-                String title = task.getTitle() == null
-                        ? ""
-                        : task.getTitle().toLowerCase(Locale.ROOT);
-
-                String description = task.getDescription() == null
-                        ? ""
-                        : task.getDescription().toLowerCase(Locale.ROOT);
-
-                String status = task.getStatus() == null
-                        ? ""
-                        : task.getStatus().name().toLowerCase(Locale.ROOT);
-
-                if (title.contains(searchText)
-                        || description.contains(searchText)
-                        || status.contains(searchText)) {
-                    tasks.add(task);
+            try (ResultSet rs = pstmt.executeQuery()) {
+                while (rs.next()) {
+                    tasks.add(mapResultSetToTask(rs));
                 }
             }
         } catch (SQLException e) {
-            logger.error("Database error", e);
-            throw new DatabaseException("Failed to execute database operation: " + e.getMessage(), e);
+            logger.error("Database error during search", e);
+            throw new DatabaseException("Failed to execute search operation: " + e.getMessage(), e);
         }
 
         return tasks;
