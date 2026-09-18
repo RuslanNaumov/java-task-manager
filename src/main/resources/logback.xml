@@ -1,30 +1,35 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <configuration>
-    <!-- 1. Настройка вывода в КОНСОЛЬ -->
-<!--    <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">-->
-<!--        <encoder>-->
-<!--            &lt;!&ndash; Формат сообщения: время | уровень | имя класса | сообщение &ndash;&gt;-->
-<!--            <pattern>%d{HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n</pattern>-->
-<!--        </encoder>-->
-<!--    </appender>-->
 
-
-    <!-- 2. Настройка вывода в ФАЙЛ -->
-    <appender name="FILE" class="ch.qos.logback.core.FileAppender">
+    <!-- 1. Настройка вывода в ФАЙЛ с ротацией -->
+    <appender name="FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
+        <!-- Путь к текущему активному файлу логов -->
         <file>${user.home}/.java-task-manager/logs/app.log</file>
-        <append>false</append>
+
+        <!-- Политика ротации: основана на времени -->
+        <rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
+            <!-- Шаблон имени для архивных файлов. %d{yyyy-MM-dd} означает, что файл будет создаваться каждый день -->
+            <fileNamePattern>${user.home}/.java-task-manager/logs/app.%d{yyyy-MM-dd}.log</fileNamePattern>
+
+            <!-- Хранить логи только за последние 7 дней. Старые файлы будут автоматически удаляться -->
+            <maxHistory>7</maxHistory>
+
+            <!-- Ограничение общего размера логов -->
+            <totalSizeCap>50MB</totalSizeCap>
+        </rollingPolicy>
+
+        <!-- Формат сообщения в файле -->
         <encoder>
             <pattern>%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n</pattern>
         </encoder>
     </appender>
 
-    <!-- 3. Уровни логирования для конкретных пакетов -->
-    <logger name="com.github.ruslannaumov" level="TRICE"/>
+    <!-- 2. Уровни логирования для конкретных пакетов -->
+    <logger name="com.github.ruslannaumov" level="TRACE"/>
     <logger name="org.sqlite" level="WARN"/>
 
-    <!-- 4. Корневой логгер: куда писать по умолчанию -->
+    <!-- 3. Корневой логгер -->
     <root level="INFO">
-<!--        <appender-ref ref="CONSOLE"/>-->
         <appender-ref ref="FILE"/>
     </root>
 </configuration>

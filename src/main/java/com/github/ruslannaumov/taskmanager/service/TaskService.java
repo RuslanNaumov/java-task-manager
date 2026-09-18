@@ -3,11 +3,13 @@ package com.github.ruslannaumov.taskmanager.service;
 import com.github.ruslannaumov.taskmanager.dao.ITaskDao;
 import com.github.ruslannaumov.taskmanager.dto.TaskRequestDTO;
 import com.github.ruslannaumov.taskmanager.dto.TaskResponseDTO;
+import com.github.ruslannaumov.taskmanager.exception.DatabaseException;
 import com.github.ruslannaumov.taskmanager.model.Task;
 import com.github.ruslannaumov.taskmanager.util.ValidationUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.sql.SQLException;
 import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
@@ -73,13 +75,6 @@ public class TaskService implements ITaskService {
     }
 
     @Override
-    public List<TaskResponseDTO> getTasksByPage(int page, int size) {
-        return taskDao.findAllWithPagination(page, size).stream()
-                .map(TaskResponseDTO::from)
-                .collect(Collectors.toList());
-    }
-
-    @Override
     public int getTotalPages(int count, int size) {
         return Math.max(1, (int) Math.ceil((double) count / size));
     }
@@ -92,7 +87,12 @@ public class TaskService implements ITaskService {
     }
 
     @Override
-    public int getTaskCount() {
-        return taskDao.count();
+    public void checkDatabaseConnection() throws DatabaseException {
+        try {
+            taskDao.checkConnection();
+        } catch (SQLException e) {
+            // Оборачиваем SQL-ошибку в нашу DatabaseException
+            throw new DatabaseException("Cannot connect to database: " + e.getMessage(), e);
+        }
     }
 }

@@ -4,6 +4,7 @@ import com.github.ruslannaumov.taskmanager.config.AppConfig;
 import com.github.ruslannaumov.taskmanager.dto.TaskRequestDTO;
 import com.github.ruslannaumov.taskmanager.dto.TaskResponseDTO;
 import com.github.ruslannaumov.taskmanager.exception.DatabaseException;
+import com.github.ruslannaumov.taskmanager.exception.ReturnToListException;
 import com.github.ruslannaumov.taskmanager.exception.ReturnToMainMenuException;
 import com.github.ruslannaumov.taskmanager.exception.ValidationException;
 import com.github.ruslannaumov.taskmanager.model.TaskStatus;
@@ -12,6 +13,7 @@ import com.github.ruslannaumov.taskmanager.util.ValidationUtils;
 
 import static com.github.ruslannaumov.taskmanager.util.ColorUtils.*;
 
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -24,6 +26,9 @@ public class ConsoleUI {
     private static final int COL_TITLE = 30;
     private static final int COL_DESC = 40;
     private static final int COL_STATUS = 15;
+
+    private static final DateTimeFormatter DATE_FORMATTER =
+            DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
 
     public ConsoleUI(ITaskService taskService) {
         this.taskService = taskService;
@@ -49,7 +54,7 @@ public class ConsoleUI {
                         pause();
                     }
                 }
-            } catch (ReturnToMainMenuException e) {
+            } catch (ReturnToMainMenuException | ReturnToListException e) {
                 clearScreen();
             } catch (DatabaseException e) {
                 // Сюда попадет любая ошибка БД из createTask, viewTasks, delete и т.д.
@@ -97,21 +102,26 @@ public class ConsoleUI {
             while (true) {
                 clearScreen();
                 System.out.println(red("No tasks found."));
-                System.out.println(yellow("Return to [M]enu and create  task"));
+                System.out.println(yellow("Return to [M]enu and create a task"));
 
                 String rawInput = JLineInputHelper.readLine(blue("> ")).trim();
                 if (rawInput.equalsIgnoreCase("M")) {
                     throw new ReturnToMainMenuException();
                 }
-                // Игнорируем любой другой ввод, ждем только 'M'
+
+                // Если ввели что-то другое, печатаем ошибку и ждем Enter
+                System.out.println(red("Invalid command. Please type 'M' to return to the main menu."));
+                pause();
             }
         }
 
         // 2. ОСНОВНАЯ ЛОГИКА: Выполняется ТОЛЬКО если задачи есть
         int currentPage = 1;
-        int totalPages=taskService.getTotalPages(tasks.size(), PAGE_SIZE);
+        int totalPages = taskService.getTotalPages(tasks.size(), PAGE_SIZE);
+
         while (true) {
             clearScreen();
+
             if (currentPage > totalPages) currentPage = totalPages;
             if (currentPage < 1) currentPage = 1;
 
@@ -187,7 +197,7 @@ public class ConsoleUI {
                 }
 
                 default -> {
-                    System.out.println(red("Invalid command"));
+                    System.out.println(red("Invalid command."));
                     pause();
                 }
             }
@@ -195,9 +205,8 @@ public class ConsoleUI {
     }
 
     private void createTask() {
-        // ПРОВЕРКА ДОСТУПНОСТИ БД
         try {
-            taskService.getTaskCount();
+            taskService.checkDatabaseConnection();
         } catch (DatabaseException e) {
             displayFatalDatabaseError(e.getMessage());
             return;
@@ -209,7 +218,7 @@ public class ConsoleUI {
                 System.out.println();
                 System.out.println(bold("You must fill in the fields: title, description, status"));
                 System.out.println();
-                System.out.println(yellow("Type [M] at any prompt to return to Main Menu"));
+                System.out.println(yellow("Type [M] or [B] to return to Main Menu"));
                 System.out.println();
             };
 
@@ -237,7 +246,7 @@ public class ConsoleUI {
         } catch (DatabaseException e) {
             // ПЕРЕХВАТ ОШИБКИ БД ПРИ СОХРАНЕНИИ
             displayFatalDatabaseError(e.getMessage());
-        } catch (ReturnToMainMenuException e) {
+        } catch (ReturnToMainMenuException|ReturnToListException e) {
             System.out.println(red("Task creation cancelled."));
             pause();
             throw e;
@@ -247,29 +256,94 @@ public class ConsoleUI {
         }
     }
 
-    private void editSpecificTask(Long id) {
-        // ПРОВЕРКА ДОСТУПНОСТИ БД
+    private void processSpecificTask(Long id, String actionType) {
         try {
-            taskService.getTaskCount();
+            // 1. Получаем задачу.
+            TaskResponseDTO taskDTO = taskService.getTaskById(id).orElse(null);
+
+            if (taskDTO == null) {
+                System.out.println(red("Task with ID " + id + " not found."));
+                pause();
+                return;
+            }
+
+            boolean showError = false;
+
+            while (true) {
+                if (showError) {
+                    System.out.println(red("Invalid command. Please follow the instructions."));
+                    pause();
+                    showError = false;
+                }
+
+                // 2. Формируем заголовок и подсказку в зависимости от действия
+                String header = actionType + " TASK #";
+                String tip = switch (actionType) {
+                    case "VIEW" -> "Type [B] to go back, [M] to the Main Menu.";
+                    case "DELETE" -> "Warning: This action cannot be undone.\nType [B] to go back, [M] to the Main Menu.";
+                    case "EDIT" -> "Press [Enter] to start editing, [B] to cancel, or [M] to the Main Menu.";
+                    default -> "";
+                };
+
+                printTaskDetails(taskDTO, header, tip);
+
+                // 3. Читаем ввод
+                String prompt = switch (actionType) {
+                    case "DELETE" -> blue("Are you sure you want to delete task #" + id + " (y/n): ");
+                    case "EDIT" -> blue("Command: ");
+                    case "VIEW" -> blue("Command: ");
+                    default -> blue("> ");
+                };
+
+                String input = JLineInputHelper.readLine(prompt).trim();
+
+                // 4. Базовая навигация
+                if (input.equalsIgnoreCase("B")) {
+                    return; // Выходим из метода, возвращаемся к списку задач
+                }
+                if (input.equalsIgnoreCase("M")) {
+                    throw new ReturnToMainMenuException(); // Пробрасываем исключение выше
+                }
+
+                // 5. Специфичная логика для каждого режима
+                if (actionType.equals("VIEW")) {
+                    // Для просмотра любой другой ввод считается ошибкой
+                    showError = true;
+                }
+                else if (actionType.equals("DELETE")) {
+                    if (input.equalsIgnoreCase("Y")) {
+                        taskService.deleteTask(id);
+                        System.out.println(green("Task deleted successfully!"));
+                        pause();
+                        return;
+                    } else if (input.equalsIgnoreCase("N")) {
+                        System.out.println(red("Deletion cancelled."));
+                        pause();
+                        return;
+                    } else {
+                        showError = true;
+                    }
+                }
+                else if (actionType.equals("EDIT")) {
+                    if (input.isEmpty() || input.equalsIgnoreCase("E")|| input.equalsIgnoreCase("ENTER")) {
+                        performEdit(taskDTO);
+                        return;
+                    } else {
+                        showError = true;
+                    }
+                }
+            }
         } catch (DatabaseException e) {
+            // ПЕРЕХВАТ ОШИБКИ БД для VIEW, EDIT и DELETE
             displayFatalDatabaseError(e.getMessage());
-            return;
         }
+    }
 
-        TaskResponseDTO taskDTO = taskService.getTaskById(id).orElse(null);
-        if (taskDTO == null) {
-            System.out.println(red("Task with ID " + id + " not found."));
-            pause();
-            return;
-        }
-
+    private void performEdit(TaskResponseDTO taskDTO) {
         Runnable baseEditContext = () -> {
-            System.out.println(bold("EDIT TASK #" + id));
-            System.out.println();
-            printTaskDetails(taskDTO);
-            System.out.println();
-            System.out.println(yellow("Press Enter to keep current value. Type [M] to cancel."));
-            System.out.println();
+            String header = "EDIT TASK #";
+            String tip = "Type [B] to cancel, or [M] for Main Menu.";
+            printTaskDetails(taskDTO, header, tip);
         };
 
         try {
@@ -289,104 +363,35 @@ public class ConsoleUI {
             TaskStatus finalStatus = readValidatedStatus(taskDTO.status(), statusContext);
 
             TaskRequestDTO updateDTO = new TaskRequestDTO(finalTitle, finalDesc, finalStatus);
-            taskService.updateTask(id, updateDTO);
+            taskService.updateTask(taskDTO.id(), updateDTO); // Может выбросить DatabaseException
+
             System.out.println(green("Task updated successfully!"));
             pause();
 
-        } catch (DatabaseException e) {
-            // ПЕРЕХВАТ ОШИБКИ БД ПРИ СОХРАНЕНИИ
-            displayFatalDatabaseError(e.getMessage());
         } catch (ReturnToMainMenuException e) {
             System.out.println(red("Edit cancelled."));
             pause();
             throw e;
+        } catch (ReturnToListException e) {
+            System.out.println(red("Edit cancelled."));
+            pause();
         } catch (Exception e) {
             System.out.println(red("Unexpected error: " + e.getMessage()));
             pause();
         }
     }
 
-    private void deleteSpecificTask(Long id) {
-        // 1. Проверка существования задачи (БЕЗ очистки экрана)
-        var taskDTO = taskService.getTaskById(id).orElse(null);
-        if (taskDTO == null) {
-            System.out.println(red("Task with ID " + id + " not found."));
-            pause();
-            return; // Возвращаемся к списку, экран не стерт
-        }
-
-        // 2. Если задача найдена, очищаем экран и показываем подтверждение
-        clearScreen();
-        System.out.println(bold("DELETE TASK #" + id));
-        System.out.println();
-        printTaskDetails(taskDTO);
-        System.out.println();
-        System.out.println(yellow("Warning: This action cannot be undone."));
-        System.out.println();
-
-        // 3. Подтверждение удаления
-        String confirm = JLineInputHelper.readLine(blue("Are you sure you want to delete task #" + id + " (y/n): ")).trim();
-
-        if (confirm.equalsIgnoreCase("y")) {
-            taskService.deleteTask(id);
-            System.out.println(green("Task deleted successfully!"));
-            pause();
-        } else {
-            System.out.println(red("Deletion cancelled."));
-            pause();
-        }
-    }
-
     private void viewSpecificTask(Long id) {
-        // 1. Проверка существования задачи (БЕЗ очистки экрана)
-        var taskDTO = taskService.getTaskById(id).orElse(null);
-        if (taskDTO == null) {
-            System.out.println(red("Task with ID " + id + " not found."));
-            pause();
-            return;
-        }
-
-        // Флаг для управления показом ошибки и последующей перерисовкой
-        boolean showError = false;
-
-        while (true) {
-            // Если в предыдущем цикле была ошибка, показываем её, делаем паузу и сбрасываем флаг
-            if (showError) {
-                System.out.println(red("Invalid command. Please type [B] or [M]."));
-                pause();
-                showError = false;
-            }
-
-            // 2. Очищаем экран и рисуем детали задачи (выполняется при первом входе и после каждой ошибки)
-            clearScreen();
-            System.out.println(bold("VIEW TASK #" + id));
-            System.out.println();
-            System.out.printf(bold("ID: %d%n"), taskDTO.id());
-            System.out.printf(bold("Title: %s%n"), taskDTO.title());
-            System.out.printf(bold("Description: %s%n"), taskDTO.description() != null ? taskDTO.description() : "(empty)");
-            System.out.printf(bold("Status: %s%n"), taskDTO.status());
-            System.out.printf(bold("Created: %s%n"), taskDTO.createdAt() != null ? taskDTO.createdAt().toString() : "N/A");
-            System.out.printf(bold("Updated: %s%n"), taskDTO.updatedAt() != null ? taskDTO.updatedAt().toString() : "N/A");
-            System.out.println();
-            System.out.println(yellow("Type [B] to go back to the list, or [M] to return to the Main Menu."));
-            System.out.println();
-
-            // 3. Читаем ввод
-            String input = JLineInputHelper.readLine(blue("> ")).trim().toUpperCase();
-
-            if (input.equals("B")) {
-                return; // Выходим, возвращаем "REFRESH" в список
-            } else if (input.equals("M")) {
-                throw new ReturnToMainMenuException(); // Возврат в главное меню
-            } else {
-                // Если ввод некорректный, устанавливаем флаг.
-                // На следующей итерации цикла сработает блок if (showError), покажет ошибку, сделает pause() и перерисует экран.
-                showError = true;
-            }
-        }
+        processSpecificTask(id, "VIEW");
     }
 
-    // === ХЕЛПЕРЫ ВАЛИДАЦИИ ===
+    private void editSpecificTask(Long id) {
+        processSpecificTask(id, "EDIT");
+    }
+
+    private void deleteSpecificTask(Long id) {
+        processSpecificTask(id, "DELETE");
+    }
 
     private String readValidatedField(String fieldName, String currentValue,
                                       java.util.function.Consumer<String> validator,
@@ -404,6 +409,10 @@ public class ConsoleUI {
 
             if (input.equalsIgnoreCase("M")) {
                 throw new ReturnToMainMenuException();
+            }
+
+            if (input.equalsIgnoreCase("B")) {
+                throw new ReturnToListException();
             }
 
             if (input.isBlank()) {
@@ -444,6 +453,10 @@ public class ConsoleUI {
                 throw new ReturnToMainMenuException();
             }
 
+            if (input.equalsIgnoreCase("B")) {
+                throw new ReturnToListException();
+            }
+
             if (input.isBlank()) {
                 return currentStatus != null ? currentStatus : TaskStatus.PENDING;
             }
@@ -482,31 +495,6 @@ public class ConsoleUI {
                 return input;
             }
             System.out.println(red("Search query cannot be empty. Please enter at least 1 character."));
-        }
-    }
-
-    private Long readValidTaskIdFromDTOList(List<TaskResponseDTO> validTasks, String prompt) {
-        while (true) {
-            String input = JLineInputHelper.readLine(blue(prompt)).trim();
-
-            if (input.equalsIgnoreCase("M")) {
-                throw new ReturnToMainMenuException();
-            }
-
-            try {
-                long id = Long.parseLong(input);
-                boolean exists = validTasks.stream().anyMatch(t -> t.id().equals(id));
-
-                if (exists) {
-                    return id;
-                } else {
-                    System.out.println(red("Task with ID " + id + " not found in the current list. Try again."));
-                    pause();
-                }
-            } catch (NumberFormatException e) {
-                System.out.println(red("Invalid ID format. Please enter a valid number (or 'M' to cancel)."));
-                pause();
-            }
         }
     }
 
@@ -595,16 +583,22 @@ public class ConsoleUI {
             controls.add("[S]earch");
             System.out.println(yellow(String.join(" | ", controls)));
         }
-        System.out.println(yellow("OR Type [V]<id> to View | [E]<id> to Edit | [D]<id> to Delete (e.g., E10, D2)"));
+        System.out.println(yellow("[V]<id> to View | [E]<id> to Edit | [D]<id> to Delete (e.g., V5, E10, D2)"));
     }
 
-    private void printTaskDetails(TaskResponseDTO task) {
+    private void printTaskDetails(TaskResponseDTO task, String header,String tip) {
+        clearScreen();
+        System.out.println(bold(header + task.id()));
+        System.out.println();
         System.out.printf(bold("ID: %d%n"), task.id());
         System.out.printf(bold("Title: %s%n"), task.title());
         System.out.printf(bold("Description: %s%n"), task.description() != null ? task.description() : "(empty)");
         System.out.printf(bold("Status: %s%n"), task.status());
-        System.out.printf(bold("Created: %s%n"), task.createdAt() != null ? task.createdAt().toString() : "N/A");
-        System.out.printf(bold("Updated: %s%n"), task.updatedAt() != null ? task.updatedAt().toString() : "N/A");
+        System.out.printf(bold("Created: %s%n"), task.createdAt() != null ? task.createdAt().format(DATE_FORMATTER) : "N/A");
+        System.out.printf(bold("Updated: %s%n"), task.updatedAt() != null ? task.updatedAt().format(DATE_FORMATTER) : "N/A");
+        System.out.println();
+        System.out.println(yellow(tip));
+        System.out.println();
     }
 
     private List<String> wrapText(String text, int width) {
@@ -649,39 +643,39 @@ public class ConsoleUI {
         System.out.flush();
     }
 
-    private String readInputWithEscape(String prompt) {
-        String input = JLineInputHelper.readLine(blue(prompt)).trim();
-        if (input.equalsIgnoreCase("M")) {
-            throw new ReturnToMainMenuException();
-        }
-        return input;
-    }
-
     public void displayFatalDatabaseError(String details) {
-        clearScreen();
-
-        // Визуальное выделение ошибки
-        System.out.println(red("╔════════════════════════════════════════════════════════╗"));
-        System.out.println(red("║                CRITICAL DATABASE ERROR                 ║"));
-        System.out.println(red("╠════════════════════════════════════════════════════════╣"));
-        System.out.println(red("║ Database connection lost or unavailable.               ║"));
-        System.out.println(red("║ The application cannot function without the database.  ║"));
-        System.out.println(red("╚════════════════════════════════════════════════════════╝"));
-        System.out.println();
-        System.out.println("Technical details: " + details);
-        System.out.println();
-        System.out.println("Please ensure the database file is not corrupted, locked,");
-        System.out.println("or deleted, and that you have write permissions.");
-        System.out.println();
-
         // Бесконечный цикл, пока пользователь не введет 'exit'
         while (true) {
+            // 1. Очищаем экран в самом начале каждой итерации.
+            clearScreen();
+
+            // 2. Рисуем статический интерфейс ошибки
+            System.out.println(red("╔════════════════════════════════════════════════════════╗"));
+            System.out.println(red("║                CRITICAL DATABASE ERROR                 ║"));
+            System.out.println(red("╠════════════════════════════════════════════════════════╣"));
+            System.out.println(red("║ Database connection lost or unavailable.               ║"));
+            System.out.println(red("║ The application cannot function without the database.  ║"));
+            System.out.println(red("╚════════════════════════════════════════════════════════╝"));
+            System.out.println();
+            System.out.println("Technical details: " + details);
+            System.out.println();
+            System.out.println("Please ensure the database file is not corrupted, locked,");
+            System.out.println("or deleted, and that you have write permissions.");
+            System.out.println();
+
+            // 3. Запрашиваем ввод
             System.out.print(yellow("Type 'exit' to close the application: "));
             String input = JLineInputHelper.readLine(blue("> ")).trim();
+
+            // 4. Проверяем на корректный ввод
             if (input.equalsIgnoreCase("exit")) {
                 System.out.println("Shutting down...");
                 System.exit(1); // 1 означает, что программа завершилась с ошибкой
             }
+
+            // 5. Если ввод неверный, печатаем ошибку ПОД строкой ввода
+            System.out.println(red("Invalid command. You must type 'exit' to close the application."));
+            pause();
         }
     }
 

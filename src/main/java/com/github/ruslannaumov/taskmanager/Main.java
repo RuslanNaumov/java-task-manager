@@ -20,7 +20,7 @@ public class Main {
 
         logger.info("Java Task Manager is starting...");
 
-        // 1. Инициализация БД с защитой от фатальной ошибки
+        // 2. Инициализация БД с защитой от фатальной ошибки
         try {
             DatabaseInitializer.initialize();
         } catch (DatabaseException e) {
@@ -30,15 +30,15 @@ public class Main {
             return;
         }
 
-        // 2. Создание зависимостей
+        // 3. Создание зависимостей
         ITaskDao taskDao = new SqliteTaskDao();
         ITaskService taskService = new TaskService(taskDao);
 
-        // 3. Запуск UI
+        // 4. Запуск UI
         ConsoleUI ui = new ConsoleUI(taskService);
         ui.start();
 
-        // 4. Отключаем Jansi при завершении программы
+        // 5. Отключаем Jansi при завершении программы
         AnsiConsole.systemUninstall();
     }
 }

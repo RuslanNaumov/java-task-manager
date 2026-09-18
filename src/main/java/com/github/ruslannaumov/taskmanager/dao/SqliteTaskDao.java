@@ -186,19 +186,14 @@ public class SqliteTaskDao implements ITaskDao {
     }
 
     @Override
-    public int count() {
-        String sql = "SELECT COUNT(*) FROM tasks";
+    public void checkConnection() throws SQLException {
+        // Мы проверяем не просто соединение, а существование нашей главной таблицы.
         try (Connection conn = DatabaseConnection.getConnection();
-             Statement stmt = conn.createStatement();
-             ResultSet rs = stmt.executeQuery(sql)) {
-            if (rs.next()) {
-                return rs.getInt(1);
-            }
-        } catch (SQLException e) {
-            logger.error("Database error", e);
-            throw new DatabaseException("Failed to execute database operation: " + e.getMessage(), e);
+             Statement stmt = conn.createStatement()) {
+
+            // Пытаемся прочитать 1 строку из таблицы tasks
+            stmt.execute("SELECT 1 FROM tasks LIMIT 1");
         }
-        return 0;
     }
 
     private Task mapResultSetToTask(ResultSet rs) throws SQLException {
